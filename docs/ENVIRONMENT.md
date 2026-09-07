@@ -54,6 +54,16 @@ AttributeError: 'StableDiffusionSafetyChecker' object has no attribute 'all_tied
 diffusers 0.29.2(2024)의 safety checker를 transformers 5.x(2026)가 로드하면서 발생.
 → `CatVTONPipeline(..., skip_safety_check=True)` 로 회피 가능 (repo에 이미 옵션 있음).
 
+### 6. `ModuleNotFoundError: No module named 'av'`
+densepose의 `data/video/video_keyframe_dataset.py`가 PyAV를 import한다.
+가상 피팅에 비디오는 안 쓰지만 **import 체인에 걸려 있어서 반드시 설치해야 한다.**
+이것도 repo `requirements.txt`에 없다. → `pip install av`
+
+### 7. `ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`
+Colab이 `MPLBACKEND` 환경변수를 inline 백엔드로 설정해두는데, 이게 subprocess로 상속되면
+venv 안의 matplotlib이 그 백엔드를 못 찾아 죽는다.
+→ 워커 실행 시 `MPLBACKEND=Agg`로 덮어쓸 것.
+
 ## 검증된 실행 방법
 
 ### A. Colab + Python 3.9 venv (권장, AutoMasker 포함 전부 동작)
@@ -70,7 +80,14 @@ python3.9 -m venv /content/venv39
     scipy==1.13.1 scikit-image==0.24.0 tqdm==4.66.4 matplotlib==3.9.1 \
     fvcore iopath pycocotools omegaconf hydra-core termcolor yacs tabulate cloudpickle
 ```
-그 다음 추론 스크립트를 `/content/venv39/bin/python`으로 실행 (노트북 커널이 아니라 subprocess).
+추가로 `av`도 설치해야 한다. 그 다음 추론 스크립트를
+`MPLBACKEND=Agg /content/venv39/bin/python worker.py` 로 실행 (노트북 커널이 아니라 subprocess).
+
+**검증 완료 (2026-09-08, Colab T4)**:
+- 환경 구성 219초 (Python 3.9 설치 21초, torch 2.1.2 171초, 나머지 48초)
+- `pipeline + automasker ready` → 추론 30스텝 71초 (2.40s/it)
+- **AutoMasker가 사람 몸 형태에 맞는 마스크를 정상 생성**, 배경 아티팩트 없는 결과 확인
+- venv의 torch 2.1.2는 `sm_50~sm_80` 지원 → **이 환경이면 Kaggle P100도 쓸 수 있다**
 
 ### B. 최신 환경 + 사각형 마스크 (검증 완료, 품질 제한)
 

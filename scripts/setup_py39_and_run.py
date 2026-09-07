@@ -34,7 +34,7 @@ sh(PY + ' -m pip install -q torch==2.1.2 torchvision==0.16.2 --index-url https:/
 # 4) 나머지 의존성 + detectron2 런타임 의존성(fvcore 등, repo requirements에 빠져있음)
 sh(PY + ' -m pip install -q accelerate==0.31.0 diffusers==0.29.2 huggingface_hub==0.23.4 '
    'transformers==4.27.3 numpy==1.26.4 opencv-python==4.10.0.84 pillow==10.3.0 PyYAML==6.0.1 '
-   'scipy==1.13.1 scikit-image==0.24.0 tqdm==4.66.4 matplotlib==3.9.1 '
+   'scipy==1.13.1 scikit-image==0.24.0 tqdm==4.66.4 matplotlib==3.9.1 av '
    'fvcore iopath pycocotools omegaconf hydra-core termcolor yacs tabulate cloudpickle')
 
 # 5) 워커 스크립트 작성 (AutoMasker 원본 그대로 사용)
@@ -102,7 +102,10 @@ with open('/content/worker39.py', 'w') as f:
 
 # 6) py3.9 환경에서 실행
 print('=== running worker in python3.9 venv ===', flush=True)
-rc = subprocess.run([PY, '/content/worker39.py'], capture_output=True, text=True)
+# Colab이 MPLBACKEND=module://matplotlib_inline.backend_inline 을 걸어두는데
+# 이게 subprocess에 상속되면 venv 쪽 matplotlib이 그 백엔드를 못 찾아 죽는다.
+env = dict(os.environ, MPLBACKEND='Agg')
+rc = subprocess.run([PY, '/content/worker39.py'], capture_output=True, text=True, env=env)
 print(rc.stdout[-4000:], flush=True)
 if rc.returncode != 0:
     print('--- STDERR ---', flush=True)

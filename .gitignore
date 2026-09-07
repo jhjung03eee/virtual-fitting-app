@@ -1,0 +1,12 @@
+outputs/*
+!outputs/.gitkeep
+data/person/*
+!data/person/.gitkeep
+data/garment/*
+!data/garment/.gitkeep
+
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+*.ckpt
+*.safetensors

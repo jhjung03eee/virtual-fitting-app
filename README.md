@@ -1,33 +1,50 @@
 # 사이즈 정보를 반영한 가상 피팅 앱
 
-종합설계프로젝트 — 사용자 사진과 옷 이미지를 diffusion 기반으로 합성하고, 옷 치수와 체형을 비교해 사이즈별 핏을 보여주는 앱.
+종합설계프로젝트 — 사용자 사진과 옷 이미지를 diffusion으로 합성하고, 옷 치수와 체형을 비교해
+"이 사이즈를 사면 이렇게 핏이 나온다"를 보여주는 앱.
 
-## 현재 단계
+모델은 **직접 구동(self-hosted)** 한다. 외부 API는 쓰지 않는다.
 
-1차 목표: **사람 사진 + 옷 사진 → 합성 이미지** 프로토타입 (CatVTON)
+## 진행 상황
 
-사이즈표 매칭 / 여유분 계산 / MediaPipe Pose / 모바일 앱 UI는 다음 단계.
+- [x] CatVTON 파이프라인 구동 검증 (Colab T4, 30스텝 63초, 옷 합성 성공)
+- [x] 환경 구성 문제 전부 규명 및 문서화 → `docs/ENVIRONMENT.md`
+- [ ] AutoMasker(DensePose+SCHP) 포함 원본 그대로 구동 (Python 3.9 venv)
+- [ ] 팀원 실제 사진 + 쇼핑몰 옷 이미지로 테스트, 실패 케이스 수집
+- [ ] MediaPipe Pose로 체형(어깨너비 등) 추정 + 키 기반 스케일 보정
+- [ ] 옷 치수표 대비 여유분 계산 → S/M/L 추천
+- [ ] 모바일 앱 UI + 추론 서버 연동
+
+## 모델 구성
+
+| 역할 | 사용 |
+|---|---|
+| 가상 피팅 합성 | [CatVTON](https://github.com/Zheng-Chong/CatVTON) (HF: `zhengchong/CatVTON`) |
+| 베이스 diffusion | `runwayml/stable-diffusion-inpainting` |
+| 옷 영역 마스크 자동 생성 | CatVTON 내장 `AutoMasker` (DensePose + SCHP) |
+| 체형 추정 (예정) | MediaPipe Pose |
 
 ## 구성
 
 ```
-notebooks/catvton_tryon.ipynb   Colab·Kaggle에서 실행하는 CatVTON 추론 노트북
-data/person/                    테스트용 인물 사진 (정자세 전신)
-data/garment/                   테스트용 옷 이미지
-outputs/                        합성 결과 저장
+notebooks/catvton_tryon.ipynb        Colab/Kaggle용 추론 노트북
+scripts/setup_py39_and_run.py        Python 3.9 venv 구성 + AutoMasker 포함 추론 (권장 경로)
+scripts/colab_minimal_rectmask.py    최신 환경에서 detectron2 없이 돌리는 최소 버전 (검증됨)
+kaggle/                              Kaggle CLI로 커널 푸시해 돌린 기록
+docs/ENVIRONMENT.md                  환경 구성 시행착오 전부 (필독)
+data/person, data/garment            테스트 이미지
+outputs/                             결과
 ```
 
-## 실행 방법
+## 빠른 시작 (Colab)
 
-`notebooks/catvton_tryon.ipynb`를 Colab 또는 Kaggle에 업로드해서 위에서부터 실행.
+1. Colab에서 새 노트북 → **런타임 유형 변경 → T4 GPU** (P100은 최신 torch에서 지원 종료됨)
+2. `scripts/setup_py39_and_run.py` 내용을 셀에 붙여넣고 실행
 
-- **Colab**: Gradio 셀까지 실행하면 공개 링크가 나와서 웹 UI로 이미지 업로드 테스트 가능
-- **Kaggle**: 노트북 설정에서 Internet을 켜야 함. Gradio 공개 링크는 막히므로 배치 추론 셀 사용
+Python 3.9 환경을 따로 만드는 이유는 `docs/ENVIRONMENT.md` 참고 —
+**repo에 cp39 전용으로 컴파일된 detectron2 바이너리가 들어있어서 Python 3.12에서는 import가 안 된다.**
 
-GPU는 16GB(T4, P100) 이상이면 1024×768 해상도로 동작.
+## 주의
 
-## 참고
-
-- CatVTON: https://github.com/Zheng-Chong/CatVTON
-- 가중치: HuggingFace `zhengchong/CatVTON` (자동 다운로드)
-- 베이스 모델: `runwayml/stable-diffusion-inpainting`
+- GPU는 T4(16GB) 이상. 1024×768 추론에 약 8GB 사용.
+- 가중치는 HuggingFace에서 자동 다운로드 (최초 1회 약 4GB).

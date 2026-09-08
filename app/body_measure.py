@@ -18,6 +18,7 @@
 (가슴단면 = 가슴둘레 / 2)
 """
 import math
+import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -178,6 +179,26 @@ def _pixel_height(image, landmarks, seg_mask, w: int, h: int):
     return float(span), '세그멘테이션을 못 써서 키 스케일을 인체 비율로 근사했습니다(오차 큼).'
 
 
+# MediaPipe 1.x 에서 레거시 mp.solutions 가 제거되고 Tasks API 로 바뀌었다.
+# 두 경로를 모두 지원한다. 랜드마크 33점 토폴로지는 동일해서 POSE_LANDMARKS 는 그대로 쓴다.
+POSE_TASK_URL = ('https://storage.googleapis.com/mediapipe-models/pose_landmarker/'
+                 'pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task')
+
+
+def _pose_task_model_path() -> str:
+    """Tasks API용 모델 파일을 받아 캐시한다."""
+    import urllib.request
+
+    cache_dir = os.environ.get('VFA_SCRATCH') or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.scratch')
+    cache_dir = os.path.join(cache_dir, 'mediapipe')
+    os.makedirs(cache_dir, exist_ok=True)
+    path = os.path.join(cache_dir, 'pose_landmarker_heavy.task')
+    if not os.path.exists(path):
+        urllib.request.urlretrieve(POSE_TASK_URL, path)
+    return path
+
+
 def _run_pose(image):
     """MediaPipe Pose 실행. (landmarks, segmentation_mask) 반환."""
     try:
@@ -188,14 +209,34 @@ def _run_pose(image):
             '    <venv>/bin/pip install mediapipe'
         ) from e
 
-    with mp.solutions.pose.Pose(
-        static_image_mode=True,
-        model_complexity=2,
-        enable_segmentation=True,
-        min_detection_confidence=0.5,
-    ) as pose:
-        result = pose.process(image)
+    if hasattr(mp, 'solutions'):  # mediapipe 0.10.x 이하
+        with mp.solutions.pose.Pose(
+            static_image_mode=True,
+            model_complexity=2,
+            enable_segmentation=True,
+            min_detection_confidence=0.5,
+        ) as pose:
+            result = pose.process(image)
+        if not result.pose_landmarks:
+            return None, None
+        return result.pose_landmarks.landmark, result.segmentation_mask
+
+    # mediapipe 1.x — Tasks API
+    from mediapipe.tasks import python as mp_python
+    from mediapipe.tasks.python import vision
+
+    options = vision.PoseLandmarkerOptions(
+        base_options=mp_python.BaseOptions(model_asset_path=_pose_task_model_path()),
+        running_mode=vision.RunningMode.IMAGE,
+        output_segmentation_masks=True,
+    )
+    with vision.PoseLandmarker.create_from_options(options) as landmarker:
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
+        result = landmarker.detect(mp_image)
 
     if not result.pose_landmarks:
         return None, None
-    return result.pose_landmarks.landmark, result.segmentation_mask
+    mask = None
+    if getattr(result, 'segmentation_masks', None):
+        mask = result.segmentation_masks[0].numpy_view()
+    return result.pose_landmarks[0], mask

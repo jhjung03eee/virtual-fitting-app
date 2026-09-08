@@ -3,9 +3,10 @@
 Python 3.9 venv에서 실행:
     MPLBACKEND=Agg /content/venv39/bin/python app/gradio_app.py
 """
+import glob
+import json
 import os
 import sys
-import glob
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -39,6 +40,8 @@ _gcu.get_type = _safe_get_type
 # -------------------------------------------------------------------------
 
 from tryon_core import try_on, load_models, REPO_DIR
+from body_profile import BodyProfile
+from size_fit import SizeChart, recommend
 
 CLOTH_LABELS = {
     '상의': 'upper',
@@ -49,9 +52,60 @@ CLOTH_LABELS = {
 }
 
 
-def run(person, garment, cloth_label, steps, guidance_scale, seed):
+CHART_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         'data', 'size_charts')
+
+
+def list_charts():
+    if not os.path.isdir(CHART_DIR):
+        return []
+    return sorted(f for f in os.listdir(CHART_DIR) if f.endswith('.json'))
+
+
+def size_advice(chart_file, height, shoulder, chest, waist, hip) -> str:
+    """입력한 신체 치수와 옷 치수표를 비교해 사이즈 추천 문구를 만든다."""
+    if not chart_file:
+        return '치수표가 없어 사이즈 추천을 건너뜁니다.'
+    try:
+        profile = BodyProfile.from_inputs(
+            height_cm=height, shoulder_cm=shoulder, chest_circumference_cm=chest,
+            waist_circumference_cm=waist, hip_circumference_cm=hip,
+        )
+    except ValueError as e:
+        return f'**사이즈 추천 불가** — {e}'
+
+    problems = profile.validate()
+    if problems:
+        return '**입력값을 확인해주세요**\n\n' + '\n'.join(f'- {p}' for p in problems)
+
+    body = profile.to_chart_dimensions()
+    if not body:
+        return '신체 치수를 하나 이상 입력하면 사이즈를 추천합니다.'
+
+    with open(os.path.join(CHART_DIR, chart_file), encoding='utf-8') as f:
+        chart = SizeChart.from_dict(json.load(f))
+
+    rec = recommend(chart, body)
+    if rec.best is None:
+        return '**사이즈 추천 불가** — ' + ' '.join(rec.notes)
+
+    lines = [f'### {rec.message}', '', f'**{chart.name}** 기준', '',
+             '| 사이즈 | 항목별 여유분 | 입을 수 있음 |', '|---|---|---|']
+    for fit in rec.ranked:
+        detail = ' / '.join(f'{d.dimension} {d.ease_cm:+.1f}cm ({d.label})'
+                            for d in fit.dimensions)
+        lines.append(f"| {fit.size} | {detail} | {'O' if fit.wearable else 'X'} |")
+    for note in rec.notes:
+        lines.append(f'\n> {note}')
+    return '\n'.join(lines)
+
+
+def run(person, garment, cloth_label, steps, guidance_scale, seed,
+        chart_file, height, shoulder, chest, waist, hip):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
+
+    advice = size_advice(chart_file, height, shoulder, chest, waist, hip)
 
     result, mask_vis = try_on(
         person=person,
@@ -61,7 +115,7 @@ def run(person, garment, cloth_label, steps, guidance_scale, seed):
         guidance_scale=float(guidance_scale),
         seed=int(seed),
     )
-    return result, mask_vis
+    return result, advice, mask_vis
 
 
 def _examples():
@@ -100,6 +154,21 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 value='상의',
                 label='옷 종류',
             )
+            with gr.Accordion('내 신체 치수 (사이즈 추천용)', open=True):
+                gr.Markdown(
+                    '아는 항목만 넣어도 됩니다. **둘레**로 입력하면 치수표의 단면과 '
+                    '자동으로 맞춰 계산합니다 (가슴둘레 96 → 가슴단면 48).'
+                )
+                height_in = gr.Number(value=175, label='키 (cm)')
+                shoulder_in = gr.Number(value=None, label='어깨너비 (cm, 폭)')
+                chest_in = gr.Number(value=None, label='가슴둘레 (cm)')
+                waist_in = gr.Number(value=None, label='허리둘레 (cm)')
+                hip_in = gr.Number(value=None, label='엉덩이둘레 (cm)')
+                chart_in = gr.Dropdown(
+                    choices=list_charts(), value=(list_charts() or [None])[0],
+                    label='옷 치수표',
+                )
+
             with gr.Accordion('고급 설정', open=False):
                 steps_in = gr.Slider(10, 50, value=30, step=1, label='추론 스텝 (높을수록 품질↑ 속도↓)')
                 guidance_in = gr.Slider(1.0, 7.5, value=2.5, step=0.1, label='guidance scale')
@@ -108,13 +177,15 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
 
         with gr.Column():
             result_out = gr.Image(label='합성 결과', height=520)
+            size_out = gr.Markdown(label='사이즈 추천')
             with gr.Accordion('자동 생성된 마스크 (결과가 이상할 때 확인용)', open=False):
                 mask_out = gr.Image(label='마스크', height=400)
 
     run_btn.click(
         fn=run,
-        inputs=[person_in, garment_in, cloth_in, steps_in, guidance_in, seed_in],
-        outputs=[result_out, mask_out],
+        inputs=[person_in, garment_in, cloth_in, steps_in, guidance_in, seed_in,
+                chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
+        outputs=[result_out, size_out, mask_out],
     )
 
     examples = _examples()

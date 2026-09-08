@@ -164,9 +164,12 @@ def _pixel_height(image, landmarks, seg_mask, w: int, h: int):
     import numpy as np
 
     if seg_mask is not None:
-        ys, _xs = np.where(seg_mask > 0.5)
-        if ys.size > 0:
-            return float(ys.max() - ys.min()), ''
+        # Tasks API는 (H, W, 1)로 주고 레거시는 (H, W)로 준다. 어느 쪽이든 2차원으로 만든다.
+        mask2d = np.squeeze(np.asarray(seg_mask))
+        if mask2d.ndim == 2:
+            rows = np.where(np.any(mask2d > 0.5, axis=1))[0]
+            if rows.size > 0:
+                return float(rows.max() - rows.min()), ''
 
     # 폴백: 코~발목 거리에 머리 윗부분과 발 높이를 보정해서 더한다.
     nose_y = landmarks[POSE_LANDMARKS['nose']].y * h
@@ -238,5 +241,6 @@ def _run_pose(image):
         return None, None
     mask = None
     if getattr(result, 'segmentation_masks', None):
-        mask = result.segmentation_masks[0].numpy_view()
+        import numpy as np
+        mask = np.squeeze(result.segmentation_masks[0].numpy_view())
     return result.pose_landmarks[0], mask

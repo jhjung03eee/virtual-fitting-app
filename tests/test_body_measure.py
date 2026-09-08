@@ -124,6 +124,34 @@ class TestMeasure(unittest.TestCase):
         self.assertIn('175', text)
 
 
+class TestPixelHeight(unittest.TestCase):
+    """세그멘테이션 마스크로 키 픽셀을 잡는 경로. Tasks API는 (H,W,1)로 준다."""
+
+    def _mask(self, shape, top=100, bottom=900):
+        m = np.zeros(shape, dtype=np.float32)
+        m[top:bottom, 300:500] = 1.0
+        return m
+
+    def test_2d_mask(self):
+        px, note = bm._pixel_height(blank_image(), make_landmarks(),
+                                    self._mask((1200, 800)), 800, 1200)
+        self.assertAlmostEqual(px, 799.0, delta=1.0)
+        self.assertEqual(note, '')
+
+    def test_3d_mask_from_tasks_api(self):
+        """(H, W, 1) 마스크에서도 터지지 않고 같은 값이 나와야 한다."""
+        px, note = bm._pixel_height(blank_image(), make_landmarks(),
+                                    self._mask((1200, 800, 1)), 800, 1200)
+        self.assertAlmostEqual(px, 799.0, delta=1.0)
+        self.assertEqual(note, '')
+
+    def test_empty_mask_falls_back(self):
+        empty = np.zeros((1200, 800), dtype=np.float32)
+        px, note = bm._pixel_height(blank_image(), make_landmarks(), empty, 800, 1200)
+        self.assertGreater(px, 0)
+        self.assertIn('근사', note)
+
+
 class TestIntegrationWithSizeFit(unittest.TestCase):
     """추정 치수를 그대로 사이즈 추천에 넣었을 때 말이 되는지."""
 

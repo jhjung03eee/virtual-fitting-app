@@ -10,6 +10,33 @@ import glob
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import gradio as gr
+import gradio_client.utils as _gcu
+
+# --- gradio_client 버그 우회 ---------------------------------------------
+# pydantic이 만든 JSON 스키마에는 `additionalProperties: true` 처럼 값이 dict가 아니라
+# bool인 경우가 있는데, gradio_client가 이를 dict로 가정하고 `"const" in schema` 를 해서
+#   TypeError: argument of type 'bool' is not iterable
+# 로 터진다. gradio의 메인 라우트가 show_api 설정과 무관하게 api_info()를 호출하므로
+# 페이지 자체가 안 열린다. bool 스키마를 Any로 처리하도록 감싼다.
+_orig_json_schema_to_python_type = _gcu._json_schema_to_python_type
+_orig_get_type = _gcu.get_type
+
+
+def _safe_json_schema_to_python_type(schema, defs=None):
+    if isinstance(schema, bool):
+        return 'Any'
+    return _orig_json_schema_to_python_type(schema, defs)
+
+
+def _safe_get_type(schema):
+    if not isinstance(schema, dict):
+        return 'Any'
+    return _orig_get_type(schema)
+
+
+_gcu._json_schema_to_python_type = _safe_json_schema_to_python_type
+_gcu.get_type = _safe_get_type
+# -------------------------------------------------------------------------
 
 from tryon_core import try_on, load_models, REPO_DIR
 

@@ -56,10 +56,38 @@ CHART_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
                          'data', 'size_charts')
 
 
-def list_charts():
+def load_chart(filename):
+    with open(os.path.join(CHART_DIR, filename), encoding='utf-8') as f:
+        return SizeChart.from_dict(json.load(f))
+
+
+def list_charts(category=None):
+    """치수표 목록. category를 주면 그 부위의 치수표만 돌려준다.
+
+    상의를 입히면서 하의 치수표를 고르면 공통 항목이 없어 추천이 안 나온다.
+    선택 자체를 막는 게 낫다.
+    """
     if not os.path.isdir(CHART_DIR):
         return []
-    return sorted(f for f in os.listdir(CHART_DIR) if f.endswith('.json'))
+    files = sorted(f for f in os.listdir(CHART_DIR) if f.endswith('.json'))
+    if category is None:
+        return files
+    out = []
+    for f in files:
+        try:
+            if load_chart(f).category == category:
+                out.append(f)
+        except Exception:
+            continue
+    return out
+
+
+def charts_for_cloth(cloth_label):
+    """옷 종류 라디오 선택에 맞는 치수표로 드롭다운을 갱신한다."""
+    cloth_type = CLOTH_LABELS.get(cloth_label, 'upper')
+    category = 'lower' if cloth_type == 'lower' else 'upper'
+    files = list_charts(category)
+    return gr.update(choices=files, value=files[0] if files else None)
 
 
 def size_advice(chart_file, height, shoulder, chest, waist, hip) -> str:
@@ -82,10 +110,13 @@ def size_advice(chart_file, height, shoulder, chest, waist, hip) -> str:
     if not body:
         return '신체 치수를 하나 이상 입력하면 사이즈를 추천합니다.'
 
-    with open(os.path.join(CHART_DIR, chart_file), encoding='utf-8') as f:
-        chart = SizeChart.from_dict(json.load(f))
+    chart = load_chart(chart_file)
 
     rec = recommend(chart, body)
+    if rec.best is None and not set(chart.dimensions()) & set(body):
+        return ('**사이즈 추천 불가** — '
+                f'`{chart.name}`({chart.category})와 입력한 치수가 맞지 않습니다. '
+                '옷 종류에 맞는 치수표를 선택했는지 확인해주세요.')
     if rec.best is None:
         return '**사이즈 추천 불가** — ' + ' '.join(rec.notes)
 
@@ -164,9 +195,10 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 chest_in = gr.Number(value=None, label='가슴둘레 (cm)')
                 waist_in = gr.Number(value=None, label='허리둘레 (cm)')
                 hip_in = gr.Number(value=None, label='엉덩이둘레 (cm)')
+                _initial = list_charts('upper')
                 chart_in = gr.Dropdown(
-                    choices=list_charts(), value=(list_charts() or [None])[0],
-                    label='옷 치수표',
+                    choices=_initial, value=(_initial or [None])[0],
+                    label='옷 치수표 (선택한 옷 종류에 맞춰 자동 변경)',
                 )
 
             with gr.Accordion('고급 설정', open=False):
@@ -180,6 +212,9 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
             size_out = gr.Markdown(label='사이즈 추천')
             with gr.Accordion('자동 생성된 마스크 (결과가 이상할 때 확인용)', open=False):
                 mask_out = gr.Image(label='마스크', height=400)
+
+    # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
+    cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
 
     run_btn.click(
         fn=run,

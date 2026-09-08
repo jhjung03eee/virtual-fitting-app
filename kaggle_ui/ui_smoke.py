@@ -55,8 +55,10 @@ print('charts:', charts, flush=True)
 assert charts, '치수표를 못 찾았습니다'
 
 print('\n=== 3. 사이즈 추천 (UI 함수 경로) ===', flush=True)
+upper_chart = gradio_app.list_charts('upper')[0]
+lower_chart = gradio_app.list_charts('lower')[0]
 cases = [
-    ('평균 체형', dict(height=175, shoulder=45, chest=96, waist=80, hip=94)),
+    ('상의 - 평균 체형', dict(height=175, shoulder=45, chest=96, waist=80, hip=94)),
     ('가슴만 입력', dict(height=175, shoulder=None, chest=86, waist=None, hip=None)),
     ('단위 오타', dict(height=175, shoulder=None, chest=9.6, waist=None, hip=None)),
     ('치수 미입력', dict(height=175, shoulder=None, chest=None, waist=None, hip=None)),

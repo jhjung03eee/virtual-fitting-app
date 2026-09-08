@@ -1,0 +1,110 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@200;300;400;500;700&family=Archivo:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Gothic A1', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #111111; } a:hover { color: #767676; }
+    .lat { font-family: 'Archivo', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+    .eyebrow { font-family: 'Archivo', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: .16em; color: #999999; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; background: #ffffff; color: #111111; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px 13px;">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#111" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    <span class="eyebrow" style="color: #111111;">SIZE COMPARE</span>
+    <div style="width: 19px;"></div>
+  </div>
+
+  <div style="padding: 4px 20px 0;">
+    <div style="font-size: 20px; font-weight: 300; letter-spacing: -.02em; line-height: 1.4;">
+      같은 옷, <span style="font-weight: 500;">사이즈만</span> 다르게
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 20px 0 0;">
+
+    <div style="display: flex; flex-direction: column;">
+      <div style="position: relative; width: 100%; height: 258px; background: #f4f4f4; overflow: hidden;">
+        <img src="fitting_result.jpg" alt="" style="width: 100%; height: 100%; object-fit: cover; object-position: 50% 14%; display: block;">
+        <div style="position: absolute; left: 0; top: 0; background: #111111; color: #ffffff; padding: 5px 10px;">
+          <span class="lat" style="font-size: 12px; font-weight: 600; letter-spacing: .08em;">M</span>
+        </div>
+      </div>
+      <div style="padding: 12px 14px 0;">
+        <div style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="font-size: 14px; font-weight: 500;">레귤러</span>
+          <span class="lat" style="font-size: 12px; font-weight: 400; color: #767676;">+4.0</span>
+        </div>
+        <div style="font-size: 11px; font-weight: 300; color: #999999; margin-top: 5px; line-height: 1.5;">
+          어깨가 딱 맞고 품에<br>손가락 두 개 정도 여유
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column;">
+      <div style="position: relative; width: 100%; height: 258px; background: #f4f4f4; overflow: hidden;">
+        <img src="fitting_alt.jpg" alt="" style="width: 100%; height: 100%; object-fit: cover; object-position: 50% 14%; display: block;">
+        <div style="position: absolute; left: 0; top: 0; background: #ffffff; color: #111111; padding: 5px 10px; border-right: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0;">
+          <span class="lat" style="font-size: 12px; font-weight: 600; letter-spacing: .08em;">L</span>
+        </div>
+      </div>
+      <div style="padding: 12px 14px 0;">
+        <div style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="font-size: 14px; font-weight: 500; color: #767676;">루즈</span>
+          <span class="lat" style="font-size: 12px; font-weight: 400; color: #999999;">+7.0</span>
+        </div>
+        <div style="font-size: 11px; font-weight: 300; color: #999999; margin-top: 5px; line-height: 1.5;">
+          어깨가 살짝 떨어지고<br>품이 넉넉함
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="padding: 26px 20px 0;">
+    <div class="eyebrow" style="color: #111111; margin-bottom: 14px;">DIFFERENCE</div>
+
+    <div style="display: flex; align-items: center; padding: 13px 0; border-bottom: 1px solid #f6f6f6;">
+      <span style="flex: 1; font-size: 13px; font-weight: 300; color: #767676;">가슴단면</span>
+      <span class="lat" style="font-size: 13px; width: 52px; text-align: right;">52.0</span>
+      <span class="lat" style="font-size: 13px; width: 52px; text-align: right; color: #767676;">55.0</span>
+    </div>
+    <div style="display: flex; align-items: center; padding: 13px 0; border-bottom: 1px solid #f6f6f6;">
+      <span style="flex: 1; font-size: 13px; font-weight: 300; color: #767676;">어깨너비</span>
+      <span class="lat" style="font-size: 13px; width: 52px; text-align: right;">45.0</span>
+      <span class="lat" style="font-size: 13px; width: 52px; text-align: right; color: #767676;">47.0</span>
+    </div>
+    <div style="display: flex; align-items: center; padding: 13px 0;">
+      <span style="flex: 1; font-size: 13px; font-weight: 300; color: #767676;">총장</span>
+      <span class="lat" style="font-size: 13px; width: 52px; text-align: right;">68.0</span>
+      <span class="lat" style="font-size: 13px; width: 52px; text-align: right; color: #767676;">70.0</span>
+    </div>
+  </div>
+
+  <div style="margin: 22px 20px 0; border-left: 1px solid #111111; padding: 1px 0 1px 13px;">
+    <div style="font-size: 12px; font-weight: 300; line-height: 1.65; color: #767676;">
+      평소 오버핏을 즐겨 입으신다면 <b style="font-weight: 500; color: #111111;">L</b>,
+      깔끔한 실루엣을 원하시면 <b style="font-weight: 500; color: #111111;">M</b>.
+    </div>
+  </div>
+
+  <div style="flex: 1;"></div>
+
+  <div style="display: flex; border-top: 1px solid #f0f0f0;">
+    <button style="flex: 1; height: 58px; background: #ffffff; border: none; border-right: 1px solid #f0f0f0; font-family: 'Gothic A1', sans-serif; font-size: 14px; font-weight: 400; color: #111111; cursor: pointer;">L 담기</button>
+    <button style="flex: 1; height: 58px; background: #111111; color: #ffffff; border: none; font-family: 'Gothic A1', sans-serif; font-size: 14px; font-weight: 400; cursor: pointer;">M 담기</button>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

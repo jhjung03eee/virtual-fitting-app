@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@200;300;400;500;700&family=Archivo:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Gothic A1', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #111111; } a:hover { color: #767676; }
+    .lat { font-family: 'Archivo', system-ui, sans-serif; }
+    .eyebrow { font-family: 'Archivo', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: .16em; color: #999999; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; background: #ffffff; color: #111111; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px 14px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7"/></svg>
+    <span style="font-size: 15px; font-weight: 500;">내 치수</span>
+  </div>
+
+  <div style="padding: 6px 20px 0;">
+    <div style="font-size: 22px; font-weight: 700; line-height: 1.35; letter-spacing: -.02em;">아는 것만 넣어도<br>추천이 나옵니다</div>
+    <div style="font-size: 12px; color: #767676; margin-top: 8px; line-height: 1.55;">
+      <b style="font-weight:500; color:#111111;">둘레</b>로 입력하세요. 쇼핑몰 치수표의 단면과는
+      앱이 알아서 맞춥니다.
+    </div>
+  </div>
+
+  <div style="padding: 24px 20px 0; display: flex; flex-direction: column; gap: 0;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #111111;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 14px; font-weight: 500;">키</span>
+        <span style="font-size: 11px; color: #999999;">필수</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 4px;">
+        <span style="font-size: 22px; font-weight: 500;">175</span>
+        <span style="font-size: 12px; color: #999999;">cm</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 14px; font-weight: 500;">어깨너비</span>
+        <span style="font-size: 11px; color: #999999;">어깨 끝에서 끝까지</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 4px;">
+        <span style="font-size: 22px; font-weight: 500;">45</span>
+        <span style="font-size: 12px; color: #999999;">cm</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 14px; font-weight: 500;">가슴둘레</span>
+        <span style="font-size: 11px; color: #999999;">가장 두꺼운 부분 한 바퀴</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 4px;">
+        <span style="font-size: 22px; font-weight: 500;">96</span>
+        <span style="font-size: 12px; color: #999999;">cm</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 14px; font-weight: 500;">허리둘레</span>
+        <span style="font-size: 11px; color: #999999;">배꼽 높이 한 바퀴</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 4px;">
+        <span style="font-size: 22px; font-weight: 500;">80</span>
+        <span style="font-size: 12px; color: #999999;">cm</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-size: 14px; font-weight: 500;">엉덩이둘레</span>
+        <span style="font-size: 11px; color: #999999;">가장 넓은 부분 한 바퀴</span>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 4px;">
+        <span style="font-size: 15px; color: #c4c1bd;">미입력</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin: 20px 20px 0; border-left: 2px solid #111111; padding: 2px 0 2px 12px;">
+    <div style="font-size: 12px; line-height: 1.55; color: #767676;">
+      가슴둘레 <b style="color:#111111; font-weight:500;">96</b> 은 치수표의
+      가슴단면 <b style="color:#111111; font-weight:500;">48</b> 과 비교됩니다.
+    </div>
+  </div>
+
+  <div style="flex: 1;"></div>
+
+  <div style="padding: 0 20px 22px;">
+    <button style="width: 100%; height: 54px; background: #111111; color: #fff; border: none; font-family: 'Gothic A1', sans-serif; font-size: 15px; font-weight: 500; cursor: pointer;">저장하고 피팅하기</button>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -77,8 +77,15 @@ def _sync():
         torch.cuda.synchronize()
 
 
-def try_on(person, garment, cloth_type='upper', steps=30, guidance_scale=2.5, seed=42,
-           scheduler='ddim', eta=1.0, return_timing=False):
+# 기본값 근거: 벤치마크 45건 결과 DPM++ 8스텝이 같은 샘플러 30스텝 대비 SSIM 0.984로
+# 눈으로 구별하기 어려우면서 3.5배 빠르다. DDIM은 스텝을 줄이면 무너지므로(4스텝 0.895)
+# 스텝만 줄이는 게 아니라 샘플러를 바꾸는 것이 핵심이다. docs/TEST_RESULTS.md 참고.
+DEFAULT_SCHEDULER = 'dpm'
+DEFAULT_STEPS = 8
+
+
+def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS, guidance_scale=2.5,
+           seed=42, scheduler=DEFAULT_SCHEDULER, eta=1.0, return_timing=False):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image

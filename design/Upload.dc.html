@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@200;300;400;500;700&family=Archivo:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Gothic A1', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    a { color: #111111; } a:hover { color: #767676; }
+    .lat { font-family: 'Archivo', system-ui, sans-serif; }
+    .eyebrow { font-family: 'Archivo', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: .16em; color: #999999; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; background: #ffffff; color: #111111; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px 14px;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7"/></svg>
+    <span style="font-size: 15px; font-weight: 500;">사진 올리기</span>
+  </div>
+
+  <div style="display: flex; gap: 4px; padding: 0 20px;">
+    <div style="flex: 1; height: 2px; background: #111111;"></div>
+    <div style="flex: 1; height: 2px; background: #111111;"></div>
+    <div style="flex: 1; height: 2px; background: #f0f0f0;"></div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 20px 20px 0;">
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="position: relative; width: 100%; height: 226px; background: #f4f4f4; overflow: hidden;">
+        <img src="fitting_alt.jpg" alt="" style="width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; display: block;">
+        <div style="position: absolute; right: 8px; top: 8px; width: 24px; height: 24px; background: rgba(11,11,11,.82); display: flex; align-items: center; justify-content: center;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1f6b46" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.5 5.5L20 7"/></svg>
+        <span style="font-size: 12px;">내 사진</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="width: 100%; height: 226px; background: #fafafa; border: 1px dashed #dcdcdc; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l4 15H5L9 5"/><path d="M9 5a3 3 0 0 0 6 0"/></svg>
+        <span style="font-size: 12px; color: #767676;">옷 사진 추가</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 5px;">
+        <div style="width: 13px; height: 13px; border: 1.5px solid #dcdcdc; border-radius: 50%;"></div>
+        <span style="font-size: 12px; color: #999999;">옷 사진</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="padding: 26px 20px 0;">
+    <div style="padding-bottom: 10px; border-bottom: 1px solid #111111;">
+      <span class="eyebrow" style="color: #111111;">CATEGORY</span>
+    </div>
+    <div style="display: flex; gap: 7px; padding-top: 14px; flex-wrap: wrap;">
+      <div style="padding: 9px 16px; border: 1.5px solid #111111; background: #111111; color: #fff; font-size: 13px;">상의</div>
+      <div style="padding: 9px 16px; border: 1px solid #e4e4e4; font-size: 13px; color: #767676;">하의</div>
+      <div style="padding: 9px 16px; border: 1px solid #e4e4e4; font-size: 13px; color: #767676;">원피스</div>
+      <div style="padding: 9px 16px; border: 1px solid #e4e4e4; font-size: 13px; color: #767676;">아우터</div>
+    </div>
+  </div>
+
+  <div style="margin: 26px 20px 0; background: #fafafa; padding: 15px 16px; display: flex; flex-direction: column; gap: 9px;">
+    <div style="display: flex; align-items: center; gap: 7px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.6"/></svg>
+      <span style="font-size: 12px; font-weight: 500;">이렇게 찍으면 결과가 좋아요</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #767676; line-height: 1.5;">
+      <span>· 정면을 보고 팔은 몸에서 살짝 떼기</span>
+      <span>· 머리부터 발끝까지 프레임 안에</span>
+      <span>· 몸에 붙는 옷일수록 정확해요</span>
+    </div>
+  </div>
+
+  <div style="flex: 1;"></div>
+
+  <div style="padding: 0 20px 22px;">
+    <button style="width: 100%; height: 54px; background: #f0f0f0; color: #c4c4c4; border: none; font-family: 'Gothic A1', sans-serif; font-size: 15px; font-weight: 500; cursor: not-allowed;">옷 사진을 올려주세요</button>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -39,7 +39,8 @@ _gcu._json_schema_to_python_type = _safe_json_schema_to_python_type
 _gcu.get_type = _safe_get_type
 # -------------------------------------------------------------------------
 
-from tryon_core import try_on, load_models, REPO_DIR
+from tryon_core import (try_on, load_models, REPO_DIR,
+                        DEFAULT_STEPS, DEFAULT_SCHEDULER)
 from body_profile import BodyProfile
 from size_fit import SizeChart, recommend
 
@@ -131,7 +132,7 @@ def size_advice(chart_file, height, shoulder, chest, waist, hip) -> str:
     return '\n'.join(lines)
 
 
-def run(person, garment, cloth_label, steps, guidance_scale, seed,
+def run(person, garment, cloth_label, scheduler, steps, guidance_scale, seed,
         chart_file, height, shoulder, chest, waist, hip):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
@@ -145,6 +146,7 @@ def run(person, garment, cloth_label, steps, guidance_scale, seed,
         steps=int(steps),
         guidance_scale=float(guidance_scale),
         seed=int(seed),
+        scheduler=scheduler,
     )
     return result, advice, mask_vis
 
@@ -173,7 +175,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
         '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다. '
         '옷 영역 마스크는 자동으로 잡습니다 (DensePose + SCHP).\n\n'
         '- 인물은 **정면 전신, 정자세** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 70초 걸립니다'
+        '- T4 GPU 기준 한 장에 약 20초 (DPM++ 8스텝 기본값)'
     )
 
     with gr.Row():
@@ -202,7 +204,14 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 )
 
             with gr.Accordion('고급 설정', open=False):
-                steps_in = gr.Slider(10, 50, value=30, step=1, label='추론 스텝 (높을수록 품질↑ 속도↓)')
+                sched_in = gr.Radio(
+                    choices=[('DPM++ (빠름, 기본)', 'dpm'), ('DDIM (원본 설정)', 'ddim')],
+                    value=DEFAULT_SCHEDULER, label='샘플러',
+                )
+                steps_in = gr.Slider(
+                    4, 50, value=DEFAULT_STEPS, step=1,
+                    label='추론 스텝 (DPM++는 8이면 30과 거의 같음. DDIM은 30 권장)',
+                )
                 guidance_in = gr.Slider(1.0, 7.5, value=2.5, step=0.1, label='guidance scale')
                 seed_in = gr.Number(value=42, precision=0, label='시드 (-1이면 매번 랜덤)')
             run_btn = gr.Button('피팅 해보기', variant='primary')
@@ -218,7 +227,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
 
     run_btn.click(
         fn=run,
-        inputs=[person_in, garment_in, cloth_in, steps_in, guidance_in, seed_in,
+        inputs=[person_in, garment_in, cloth_in, sched_in, steps_in, guidance_in, seed_in,
                 chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
         outputs=[result_out, size_out, mask_out],
     )

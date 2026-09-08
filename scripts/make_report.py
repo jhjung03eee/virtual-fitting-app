@@ -1,6 +1,6 @@
 """벤치마크 결과를 발표용 리포트로 정리.
 
-    !cd /content/vfa && python scripts/make_report.py
+    python scripts/make_report.py
 
 생성물:
     docs/TEST_RESULTS.md               시나리오 표 + 속도/품질 표
@@ -12,16 +12,17 @@ import os
 import subprocess
 import sys
 
-VENV_PY = '/content/venv39/bin/python'
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'app'))
+from paths import VENV_PY, OUT_ROOT, child_env, describe  # noqa: E402
 
 
 def _reexec_in_venv():
     if os.path.abspath(sys.executable) == os.path.abspath(VENV_PY):
         return
     if not os.path.exists(VENV_PY):
-        sys.exit('venv39가 없습니다. setup_py39_and_run.py 를 먼저 실행하세요.')
-    env = dict(os.environ, MPLBACKEND='Agg', PYTHONUNBUFFERED='1')
+        sys.exit(f'venv39가 없습니다({VENV_PY}). setup_env.py 를 먼저 실행하세요.')
+    env = child_env()
     raise SystemExit(
         subprocess.call([VENV_PY, '-u', os.path.abspath(__file__)] + sys.argv[1:], env=env)
     )
@@ -37,10 +38,12 @@ import numpy as np  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 from skimage.metrics import structural_similarity as ssim_fn  # noqa: E402
 
-BENCH_DIR = os.path.join(REPO_ROOT, 'outputs', 'bench')
+BENCH_DIR = os.path.join(OUT_ROOT, 'bench')
 CSV_PATH = os.path.join(BENCH_DIR, 'results.csv')
-REPORT_DIR = os.path.join(REPO_ROOT, 'outputs', 'report')
-DOC_PATH = os.path.join(REPO_ROOT, 'docs', 'TEST_RESULTS.md')
+REPORT_DIR = os.path.join(OUT_ROOT, 'report')
+# 리포트는 결과물과 같은 폴더에 쓴다. Kaggle에서는 /kaggle/working 아래여야
+# 커널 output으로 받아올 수 있고, 이미지 상대경로도 같은 폴더라 그대로 맞는다.
+DOC_PATH = os.path.join(REPORT_DIR, 'TEST_RESULTS.md')
 
 # dataviz 스킬의 검증 통과 팔레트 (light 모드, 카테고리 슬롯 1·2)
 SERIES = {'ddim': '#2a78d6', 'dpm': '#eb6834'}
@@ -67,7 +70,8 @@ def load_rows():
 
 
 def abs_out(r):
-    return os.path.join(REPO_ROOT, r['out_path'])
+    q = r['out_path']
+    return q if os.path.isabs(q) else os.path.join(REPO_ROOT, q)
 
 
 def ssim_vs(baseline_path, path):
@@ -252,6 +256,7 @@ def write_doc(rows, grid_path, chart_path, scored):
 
 def main():
     rows = load_rows()
+    print(describe(), flush=True)
     print(f'{len(rows)}건 로드', flush=True)
     grid = make_quality_grid(rows)
     print('격자 이미지:', grid, flush=True)

@@ -10,7 +10,9 @@ import time
 import torch
 from PIL import Image
 
-REPO_DIR = os.environ.get('CATVTON_REPO', '/content/scratch/CatVTON')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from paths import CATVTON_REPO as REPO_DIR  # noqa: E402
+
 BASE_MODEL = 'runwayml/stable-diffusion-inpainting'
 CATVTON_REPO_ID = 'zhengchong/CatVTON'
 

@@ -1,7 +1,7 @@
 {
-  "id": "jefferyjung/catvton-batch-run",
-  "title": "CatVTON batch run",
-  "code_file": "catvton_batch.py",
+  "id": "jefferyjung/vfa-benchmark",
+  "title": "VFA benchmark",
+  "code_file": "run_benchmark.py",
   "language": "python",
   "kernel_type": "script",
   "is_private": true,

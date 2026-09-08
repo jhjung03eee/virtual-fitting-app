@@ -89,7 +89,7 @@ print가 버퍼에 갇힌다.
 
 ### A. Colab + Python 3.9 venv (권장, AutoMasker 포함 전부 동작)
 
-`scripts/setup_py39_and_run.py` 참고. 요지:
+`scripts/setup_env.py` 참고. 요지:
 
 ```bash
 add-apt-repository -y ppa:deadsnakes/ppa

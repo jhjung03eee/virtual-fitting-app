@@ -1,7 +1,7 @@
 """테스트 시나리오 자동 실행 — 발표용 결과(품질/속도) 수집.
 
 Colab에서:
-    !cd /content/vfa && python scripts/benchmark.py --suite all
+    python scripts/benchmark.py --suite all
 
 venv39가 아닌 인터프리터로 실행되면 자동으로 venv39로 자기 자신을 재실행한다.
 중단됐다 다시 돌리면 이미 끝난 건은 건너뛴다(재개 가능).
@@ -12,8 +12,9 @@ import os
 import subprocess
 import sys
 
-VENV_PY = '/content/venv39/bin/python'
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'app'))
+from paths import VENV_PY, OUT_ROOT, child_env, describe  # noqa: E402
 
 
 def _reexec_in_venv():
@@ -22,11 +23,11 @@ def _reexec_in_venv():
         return
     if not os.path.exists(VENV_PY):
         sys.exit(
-            'Python 3.9 환경(/content/venv39)이 없습니다.\n'
-            '    !python /content/vfa/scripts/setup_py39_and_run.py\n'
+            f'Python 3.9 환경({VENV_PY})이 없습니다.\n'
+            '    !python scripts/setup_env.py\n'
             '를 먼저 실행하세요.'
         )
-    env = dict(os.environ, MPLBACKEND='Agg', PYTHONUNBUFFERED='1')
+    env = child_env()
     raise SystemExit(subprocess.call([VENV_PY, '-u', os.path.abspath(__file__)] + sys.argv[1:], env=env))
 
 
@@ -36,8 +37,8 @@ sys.path.insert(0, os.path.join(REPO_ROOT, 'app'))
 import glob  # noqa: E402
 from tryon_core import try_on, load_models, REPO_DIR  # noqa: E402
 
-OUT_ROOT = os.path.join(REPO_ROOT, 'outputs', 'bench')
-CSV_PATH = os.path.join(OUT_ROOT, 'results.csv')
+BENCH_ROOT = os.path.join(OUT_ROOT, 'bench')
+CSV_PATH = os.path.join(BENCH_ROOT, 'results.csv')
 FIELDS = ['suite', 'case_id', 'person', 'garment', 'cloth_type', 'scheduler',
           'steps', 'guidance', 'seed', 'mask_s', 'diffusion_s', 'total_s', 'out_path']
 
@@ -119,7 +120,7 @@ def already_done(case):
 
 
 def case_out_path(case):
-    return os.path.join(OUT_ROOT, case['suite'], f"{case['case_id']}.png")
+    return os.path.join(BENCH_ROOT, case['suite'], f"{case['case_id']}.png")
 
 
 def append_row(row):
@@ -146,11 +147,12 @@ def main():
         cases = cases[:a.limit]
 
     todo = [c for c in cases if not already_done(c)]
+    print(describe(), flush=True)
     print(f'총 {len(cases)}건 중 {len(todo)}건 실행 (나머지는 이미 완료)', flush=True)
     if not todo:
         return
 
-    os.makedirs(OUT_ROOT, exist_ok=True)
+    os.makedirs(BENCH_ROOT, exist_ok=True)
     load_models()
     print('모델 로딩 완료', flush=True)
 
@@ -171,7 +173,7 @@ def main():
         row = {k: c.get(k) for k in ('suite', 'case_id', 'person', 'garment', 'cloth_type',
                                      'scheduler', 'steps', 'guidance', 'seed', 'note')}
         row.update(timing)
-        row['out_path'] = os.path.relpath(out_path, REPO_ROOT)
+        row['out_path'] = out_path
         append_row(row)
         print(f'    {timing["total_s"]}s (mask {timing["mask_s"]}s / diffusion {timing["diffusion_s"]}s)',
               flush=True)

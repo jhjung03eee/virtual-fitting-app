@@ -9,16 +9,18 @@ import glob
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app'))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(REPO_ROOT, 'app'))
 
-from tryon_core import try_on, load_models, REPO_DIR, CLOTH_TYPES
+from paths import OUT_ROOT  # noqa: E402
+from tryon_core import try_on, load_models, REPO_DIR, CLOTH_TYPES  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--person', default=None, help='인물 사진 경로 (생략 시 저장소 데모 이미지)')
 ap.add_argument('--garment', default=None, help='옷 사진 경로 (생략 시 저장소 데모 이미지)')
 ap.add_argument('--cloth-type', default='upper', choices=CLOTH_TYPES)
 ap.add_argument('--steps', type=int, default=30)
-ap.add_argument('--out', default='/content/outputs')
+ap.add_argument('--out', default=os.path.join(OUT_ROOT, 'smoke'))
 a = ap.parse_args()
 
 load_models()

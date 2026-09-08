@@ -29,7 +29,7 @@
 
 ```
 notebooks/catvton_tryon.ipynb        Colab/Kaggle용 추론 노트북
-scripts/setup_py39_and_run.py        Python 3.9 venv 구성 + AutoMasker 포함 추론 (권장 경로)
+scripts/setup_env.py        Python 3.9 venv 구성 + AutoMasker 포함 추론 (권장 경로)
 scripts/colab_minimal_rectmask.py    최신 환경에서 detectron2 없이 돌리는 최소 버전 (검증됨)
 kaggle/                              Kaggle CLI로 커널 푸시해 돌린 기록
 docs/ENVIRONMENT.md                  환경 구성 시행착오 전부 (필독)
@@ -40,7 +40,7 @@ outputs/                             결과
 ## 빠른 시작 (Colab)
 
 1. Colab에서 새 노트북 → **런타임 유형 변경 → T4 GPU** (P100은 최신 torch에서 지원 종료됨)
-2. `scripts/setup_py39_and_run.py` 내용을 셀에 붙여넣고 실행 (Python 3.9 환경 구성, 최초 1회 ~4분)
+2. `scripts/setup_env.py` 내용을 셀에 붙여넣고 실행 (Python 3.9 환경 구성, 최초 1회 ~4분)
 3. 웹 UI를 띄우려면 셀 두 개만 실행:
 
 ```python

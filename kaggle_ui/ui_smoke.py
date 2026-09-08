@@ -22,7 +22,10 @@ os.makedirs('/kaggle/tmp', exist_ok=True)
 if not os.path.exists(REPO_DIR):
     subprocess.run(['git', 'clone', '-q', REPO_URL, REPO_DIR], check=True)
 
-subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'gradio==4.44.1'], check=True)
+# 배포 환경(venv39)과 같은 버전 조합으로 맞춘다.
+# Kaggle 기본 huggingface_hub는 1.x라 HfFolder가 없어서 gradio 4.44.1 import가 깨진다.
+subprocess.run([sys.executable, '-m', 'pip', 'install', '-q',
+                'gradio==4.44.1', 'huggingface_hub==0.23.4'], check=True)
 
 # CatVTON 파이프라인은 GPU와 4GB 가중치가 필요하다. UI 검증에는 불필요하므로
 # tryon_core를 가짜 모듈로 바꿔치기해서 무거운 import를 피한다.

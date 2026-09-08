@@ -1,14 +1,19 @@
 """Colab에서 Gradio 웹 UI를 띄운다.
 
 전제: scripts/setup_py39_and_run.py 로 /content/venv39 환경이 이미 구성돼 있을 것.
-app/tryon_core.py, app/gradio_app.py 가 /content/app/ 에 있어야 한다.
+app/ 은 이 스크립트 위치를 기준으로 찾는다 (저장소를 어디에 clone하든 동작).
 """
 import os
 import subprocess
 import sys
 
 VENV_PY = '/content/venv39/bin/python'
-APP_DIR = '/content/app'
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_DIR = os.path.join(REPO_ROOT, 'app')
+APP_PY = os.path.join(APP_DIR, 'gradio_app.py')
+
+if not os.path.exists(APP_PY):
+    sys.exit(f'{APP_PY} 를 찾을 수 없습니다. 저장소가 온전히 clone됐는지 확인하세요.')
 
 if not os.path.exists(VENV_PY):
     sys.exit(
@@ -27,7 +32,7 @@ env = dict(os.environ, MPLBACKEND='Agg')
 
 print('Gradio 앱 실행 — 아래 *.gradio.live 링크로 접속하세요.', flush=True)
 proc = subprocess.Popen(
-    [VENV_PY, os.path.join(APP_DIR, 'gradio_app.py')],
+    [VENV_PY, APP_PY],
     env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
 )
 for line in proc.stdout:

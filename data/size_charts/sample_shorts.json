@@ -1,0 +1,11 @@
+{
+  "name": "샘플 반바지",
+  "category": "lower",
+  "source": "예시 데이터 — 특정 브랜드의 실제 치수가 아님",
+  "unit": "cm (단면)",
+  "sizes": {
+    "S": {"waist": 36.0, "hip": 50.0, "length": 48.0},
+    "M": {"waist": 38.0, "hip": 52.0, "length": 50.0},
+    "L": {"waist": 40.0, "hip": 54.0, "length": 52.0}
+  }
+}

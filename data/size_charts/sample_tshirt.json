@@ -1,0 +1,12 @@
+{
+  "name": "샘플 반팔 티셔츠",
+  "category": "upper",
+  "source": "예시 데이터 — 국내 쇼핑몰 상의 치수표의 일반적인 형태를 본뜬 것이며 특정 브랜드의 실제 치수가 아님",
+  "unit": "cm (단면)",
+  "sizes": {
+    "S":  {"chest": 49.0, "shoulder": 43.0, "length": 66.0},
+    "M":  {"chest": 52.0, "shoulder": 45.0, "length": 68.0},
+    "L":  {"chest": 55.0, "shoulder": 47.0, "length": 70.0},
+    "XL": {"chest": 58.0, "shoulder": 49.0, "length": 72.0}
+  }
+}

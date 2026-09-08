@@ -30,6 +30,34 @@ if not os.path.exists(VENV_PY):
 print('gradio 설치 중...', flush=True)
 subprocess.run([VENV_PY, '-m', 'pip', 'install', '-q', 'gradio==4.44.1'], check=True)
 
+# gradio_client 버그를 설치된 파일에 직접 패치한다.
+# pydantic 스키마의 `additionalProperties: true` 는 dict가 아니라 bool인데
+# gradio_client가 dict로 가정하고 `"const" in schema` 를 해서 터진다:
+#   TypeError: argument of type 'bool' is not iterable
+# gradio 메인 라우트가 show_api 설정과 무관하게 api_info()를 호출하므로 페이지가 안 열린다.
+PATCH = r'''
+import re
+import gradio_client.utils as u
+
+path = u.__file__
+src = open(path, encoding='utf-8').read()
+guard = "    if not isinstance(schema, dict):\n        return \"Any\"\n"
+
+changed = False
+for pattern in (r"(def get_type\([^)]*\)[^:]*:\n)", r"(def _json_schema_to_python_type\([^)]*\)[^:]*:\n)"):
+    m = re.search(pattern, src)
+    if m and not src[m.end():m.end() + len(guard) + 40].lstrip().startswith("if not isinstance(schema, dict)"):
+        src = src[:m.end()] + guard + src[m.end():]
+        changed = True
+
+if changed:
+    open(path, 'w', encoding='utf-8').write(src)
+    print('gradio_client 패치 적용:', path)
+else:
+    print('gradio_client 이미 패치됨')
+'''
+subprocess.run([VENV_PY, '-c', PATCH], check=True)
+
 # Colab이 걸어둔 inline 백엔드가 상속되면 venv쪽 matplotlib이 죽는다 (docs/ENVIRONMENT.md #7)
 env = dict(os.environ, MPLBACKEND='Agg')
 

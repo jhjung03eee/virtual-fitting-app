@@ -49,23 +49,41 @@ print('=== 1. import ===', flush=True)
 import gradio_app  # noqa: E402
 print('OK — gradio_app import 성공', flush=True)
 
-print('\n=== 2. 치수표 목록 ===', flush=True)
-charts = gradio_app.list_charts()
-print('charts:', charts, flush=True)
-assert charts, '치수표를 못 찾았습니다'
+print('\n=== 2. 옷 종류별 치수표 필터링 ===', flush=True)
+print('  전체   :', gradio_app.list_charts(), flush=True)
+upper_charts = gradio_app.list_charts('upper')
+lower_charts = gradio_app.list_charts('lower')
+print('  상의용 :', upper_charts, flush=True)
+print('  하의용 :', lower_charts, flush=True)
+for label in ('상의', '하의', '아우터'):
+    upd = gradio_app.charts_for_cloth(label)
+    picked = upd.get('choices') if isinstance(upd, dict) else getattr(upd, 'choices', None)
+    print(f'  라디오 {label} -> {picked}', flush=True)
+
+assert upper_charts, '상의 치수표가 없습니다'
+assert lower_charts, '하의 치수표가 없습니다'
+assert not (set(upper_charts) & set(lower_charts)), '상의/하의 치수표가 섞였습니다'
+
+upper_chart, lower_chart = upper_charts[0], lower_charts[0]
 
 print('\n=== 3. 사이즈 추천 (UI 함수 경로) ===', flush=True)
-upper_chart = gradio_app.list_charts('upper')[0]
-lower_chart = gradio_app.list_charts('lower')[0]
 cases = [
-    ('상의 - 평균 체형', dict(height=175, shoulder=45, chest=96, waist=80, hip=94)),
-    ('가슴만 입력', dict(height=175, shoulder=None, chest=86, waist=None, hip=None)),
-    ('단위 오타', dict(height=175, shoulder=None, chest=9.6, waist=None, hip=None)),
-    ('치수 미입력', dict(height=175, shoulder=None, chest=None, waist=None, hip=None)),
+    ('상의 - 전부 입력', upper_chart,
+     dict(height=175, shoulder=45, chest=96, waist=80, hip=94)),
+    ('상의 - 가슴만 입력', upper_chart,
+     dict(height=175, shoulder=None, chest=86, waist=None, hip=None)),
+    ('하의 - 허리/엉덩이', lower_chart,
+     dict(height=175, shoulder=None, chest=None, waist=80, hip=94)),
+    ('불일치 - 상의 치수에 하의 치수표', lower_chart,
+     dict(height=175, shoulder=None, chest=96, waist=None, hip=None)),
+    ('단위 오타', upper_chart,
+     dict(height=175, shoulder=None, chest=9.6, waist=None, hip=None)),
+    ('치수 미입력', upper_chart,
+     dict(height=175, shoulder=None, chest=None, waist=None, hip=None)),
 ]
-for label, kw in cases:
-    out = gradio_app.size_advice(charts[0], **kw)
-    print(f'\n--- {label} ---\n{out[:400]}', flush=True)
+for label, chart, kw in cases:
+    out = gradio_app.size_advice(chart, **kw)
+    print(f'\n--- {label} ---\n{out[:420]}', flush=True)
 
 print('\n=== 4. 서버 기동 및 응답 확인 ===', flush=True)
 _app, local_url, _share = gradio_app.demo.launch(

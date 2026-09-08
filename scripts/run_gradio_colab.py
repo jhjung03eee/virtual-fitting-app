@@ -59,11 +59,13 @@ else:
 subprocess.run([VENV_PY, '-c', PATCH], check=True)
 
 # Colab이 걸어둔 inline 백엔드가 상속되면 venv쪽 matplotlib이 죽는다 (docs/ENVIRONMENT.md #7)
-env = dict(os.environ, MPLBACKEND='Agg')
+# PYTHONUNBUFFERED: 자식 stdout이 파이프면 블록 버퍼링이라 gradio가 찍는 공개 링크가
+# 버퍼에 갇혀 안 보인다. -u 와 함께 줘서 즉시 흘려보낸다.
+env = dict(os.environ, MPLBACKEND='Agg', PYTHONUNBUFFERED='1')
 
 print('Gradio 앱 실행 — 아래 *.gradio.live 링크로 접속하세요.', flush=True)
 proc = subprocess.Popen(
-    [VENV_PY, APP_PY],
+    [VENV_PY, '-u', APP_PY],
     env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
 )
 for line in proc.stdout:

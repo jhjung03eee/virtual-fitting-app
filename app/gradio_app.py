@@ -127,4 +127,20 @@ if __name__ == '__main__':
     load_models()
     print('로딩 완료. Gradio 실행합니다.', flush=True)
     # show_api=False: API 스키마 생성 경로(gradio_client)가 pydantic 버전에 따라 터지는 걸 회피
-    demo.queue().launch(share=True, show_error=True, show_api=False)
+    # prevent_thread_lock=True로 먼저 URL을 받아 직접 flush 출력한다.
+    # (gradio 자체 print는 flush를 안 해서 파이프로 실행하면 링크가 안 보인다)
+    _, local_url, share_url = demo.queue().launch(
+        share=True, show_error=True, show_api=False, prevent_thread_lock=True
+    )
+    print('=' * 60, flush=True)
+    print('로컬 주소 :', local_url, flush=True)
+    print('공개 링크 :', share_url or '(생성 실패 — 아래 안내 참고)', flush=True)
+    print('=' * 60, flush=True)
+    if not share_url:
+        print(
+            'share 링크를 못 만들었습니다. Colab이라면 아래 셀로 접속하세요:\n'
+            '    from google.colab.output import eval_js\n'
+            '    print(eval_js("google.colab.kernel.proxyPort(7860)"))',
+            flush=True,
+        )
+    demo.block_thread()

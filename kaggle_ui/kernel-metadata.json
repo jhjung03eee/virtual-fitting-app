@@ -1,0 +1,15 @@
+{
+  "id": "jefferyjung/vfa-ui-smoke",
+  "title": "VFA UI smoke",
+  "code_file": "ui_smoke.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

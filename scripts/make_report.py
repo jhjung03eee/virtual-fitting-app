@@ -55,6 +55,35 @@ REPORT_DIR = _args.out_dir
 # 커널 output으로 받아올 수 있고, 이미지 상대경로도 같은 폴더라 그대로 맞는다.
 DOC_PATH = os.path.join(REPORT_DIR, 'TEST_RESULTS.md')
 
+def _setup_font():
+    """한글 폰트가 있으면 쓰고, 없으면 라벨을 영어로 돌린다.
+
+    Kaggle/Colab 기본 이미지에는 한글 폰트가 없어서 그냥 두면 축·범례가
+    두부(□)로 깨진다. 발표 자료로 못 쓰므로 반드시 확인해야 한다.
+    """
+    from matplotlib import font_manager
+    wanted = ('NanumGothic', 'Nanum Gothic', 'Malgun Gothic', 'AppleGothic',
+              'NanumBarunGothic', 'Noto Sans CJK KR', 'Noto Sans KR')
+    available = {f.name for f in font_manager.fontManager.ttflist}
+    for name in wanted:
+        if name in available:
+            matplotlib.rcParams['font.family'] = name
+            matplotlib.rcParams['axes.unicode_minus'] = False
+            return True
+    matplotlib.rcParams['axes.unicode_minus'] = False
+    return False
+
+
+HAS_KO_FONT = _setup_font()
+LABELS = {
+    True: dict(x='한 장 생성 시간 (초)', y='베이스라인 대비 SSIM',
+               title='속도 / 품질 트레이드오프  (점 위 숫자 = 추론 스텝)',
+               cfg_on='CFG 켬', cfg_off='CFG 끔'),
+    False: dict(x='Latency per image (s)', y='SSIM vs baseline',
+                title='Speed / quality trade-off  (number = inference steps)',
+                cfg_on='CFG on', cfg_off='CFG off'),
+}[HAS_KO_FONT]
+
 # dataviz 스킬의 검증 통과 팔레트 (light 모드, 카테고리 슬롯 1·2)
 SERIES = {'ddim': '#2a78d6', 'dpm': '#eb6834'}
 TEXT_PRIMARY = '#0b0b0b'
@@ -175,10 +204,11 @@ def make_speed_chart(rows):
             if not sub:
                 continue
             name = 'DDIM' if sched == 'ddim' else 'DPM++'
+            cfg_txt = LABELS['cfg_on'] if cfg_on else LABELS['cfg_off']
             ax.scatter(
                 [r['total_s'] for r in sub], [r['ssim'] for r in sub],
                 s=70, linewidths=2, zorder=3,
-                label=f"{name} · CFG {'on' if cfg_on else 'off'}", **style
+                label=f'{name} · {cfg_txt}', **style
             )
 
     seen = set()
@@ -193,10 +223,9 @@ def make_speed_chart(rows):
             ha='center', fontsize=8, color=TEXT_SECONDARY,
         )
 
-    ax.set_xlabel('한 장 생성 시간 (초)', color=TEXT_SECONDARY, fontsize=10)
-    ax.set_ylabel('베이스라인 대비 SSIM', color=TEXT_SECONDARY, fontsize=10)
-    ax.set_title('속도 / 품질 트레이드오프  (점 위 숫자 = 추론 스텝)',
-                 color=TEXT_PRIMARY, fontsize=12, pad=12, loc='left')
+    ax.set_xlabel(LABELS['x'], color=TEXT_SECONDARY, fontsize=10)
+    ax.set_ylabel(LABELS['y'], color=TEXT_SECONDARY, fontsize=10)
+    ax.set_title(LABELS['title'], color=TEXT_PRIMARY, fontsize=12, pad=12, loc='left')
     ax.grid(True, color=GRID, linewidth=0.8, alpha=0.7, zorder=0)
     ax.set_axisbelow(True)
     for spine in ('top', 'right'):
@@ -296,6 +325,7 @@ def write_doc(rows, grid_path, chart_path, scored):
 def main():
     rows = load_rows()
     print(describe(), flush=True)
+    print('한글 폰트:', '사용' if HAS_KO_FONT else '없음 -> 차트 라벨을 영어로', flush=True)
     print(f'{len(rows)}건 로드', flush=True)
     grid = make_quality_grid(rows)
     print('격자 이미지:', grid, flush=True)

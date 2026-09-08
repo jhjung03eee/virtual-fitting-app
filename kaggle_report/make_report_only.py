@@ -9,17 +9,33 @@ import sys
 
 REPO_URL = 'https://github.com/jhjung03eee/virtual-fitting-app.git'
 REPO_DIR = '/kaggle/tmp/vfa'
-BENCH_DIR = '/kaggle/input/vfa-benchmark/bench'
+
+def find_bench_dir():
+    """kernel_sources 마운트 위치가 버전에 따라 달라서 results.csv를 직접 찾는다.
+    (실측: /kaggle/input/notebooks/<user>/<kernel>/bench)"""
+    for root, _dirs, files in os.walk('/kaggle/input'):
+        if 'results.csv' in files:
+            return root
+    return None
+
 
 os.makedirs('/kaggle/tmp', exist_ok=True)
 if not os.path.exists(REPO_DIR):
     subprocess.run(['git', 'clone', '-q', REPO_URL, REPO_DIR], check=True)
 
-if not os.path.isdir(BENCH_DIR):
+BENCH_DIR = find_bench_dir()
+if not BENCH_DIR:
     print('입력 폴더 목록:', flush=True)
     for root, dirs, files in os.walk('/kaggle/input'):
         print(root, dirs[:5], files[:5], flush=True)
-    sys.exit(f'{BENCH_DIR} 가 없습니다.')
+    sys.exit('results.csv 를 /kaggle/input 아래에서 찾지 못했습니다.')
+print('bench dir:', BENCH_DIR, flush=True)
+
+# 한글 폰트가 없으면 차트 축·범례가 두부(□)로 깨진다
+subprocess.run('apt-get install -y -qq fonts-nanum > /dev/null 2>&1', shell=True)
+subprocess.run('fc-cache -f > /dev/null 2>&1', shell=True)
+for cache in ('/root/.cache/matplotlib', os.path.expanduser('~/.cache/matplotlib')):
+    subprocess.run(f'rm -rf {cache}', shell=True)
 
 # 리포트 생성에 필요한 것만 (GPU/torch 불필요)
 subprocess.run([sys.executable, '-m', 'pip', 'install', '-q',

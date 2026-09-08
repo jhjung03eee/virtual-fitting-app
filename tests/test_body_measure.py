@@ -152,6 +152,40 @@ class TestPixelHeight(unittest.TestCase):
         self.assertIn('근사', note)
 
 
+class TestPlausibility(unittest.TestCase):
+    """스케일이 틀어지면 조용히 이상한 값을 내지 말고 이유를 남겨야 한다."""
+
+    def test_reasonable_values_pass(self):
+        notes = bm._implausible_notes(
+            {'shoulder': 44.0, 'chest': 50.0, 'hip': 48.0, 'torso_length': 52.0}, 175.0)
+        self.assertEqual(notes, [])
+
+    def test_absurd_shoulder_is_caught(self):
+        notes = bm._implausible_notes({'shoulder': 60.0}, 175.0)  # 비율 0.34
+        self.assertEqual(len(notes), 1)
+        self.assertIn('shoulder', notes[0])
+        self.assertIn('스케일', notes[0])
+
+    def test_too_small_is_caught(self):
+        notes = bm._implausible_notes({'chest': 30.0}, 175.0)  # 비율 0.17
+        self.assertTrue(notes)
+
+    def test_cropped_photo_is_flagged(self):
+        """몸이 이미지 위/아래 끝에 닿으면 잘린 사진으로 보고 경고해야 한다."""
+        mask = np.zeros((1200, 800), dtype=np.float32)
+        mask[0:1200, 300:500] = 1.0   # 위아래 꽉 참
+        _px, note = bm._pixel_height(blank_image(), make_landmarks(), mask, 800, 1200)
+        self.assertIn('잘린', note)
+        self.assertIn('머리', note)
+        self.assertIn('발', note)
+
+    def test_uncropped_photo_has_no_note(self):
+        mask = np.zeros((1200, 800), dtype=np.float32)
+        mask[100:900, 300:500] = 1.0
+        _px, note = bm._pixel_height(blank_image(), make_landmarks(), mask, 800, 1200)
+        self.assertEqual(note, '')
+
+
 class TestIntegrationWithSizeFit(unittest.TestCase):
     """추정 치수를 그대로 사이즈 추천에 넣었을 때 말이 되는지."""
 

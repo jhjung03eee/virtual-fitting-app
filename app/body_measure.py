@@ -28,8 +28,19 @@ SHOULDER_LANDMARK_TO_BREADTH = 1.18
 # 가슴/허리/엉덩이 단면은 정면 폭의 절반이 아니라, 타원 둘레의 절반이다.
 # 몸통 단면을 타원으로 보고 깊이/폭 비를 아래 값으로 가정한다.
 DEPTH_TO_WIDTH = {'chest': 0.72, 'waist': 0.78, 'hip': 0.80}
+# 엉덩이 랜드마크는 고관절 중심이라 실제 엉덩이 폭보다 훨씬 좁다.
+HIP_LANDMARK_TO_WIDTH = 1.45
 # 랜드마크 신뢰도가 이보다 낮으면 경고를 붙인다.
 MIN_VISIBILITY = 0.6
+
+# 키 대비 인체 비율의 상식적인 범위. 추정치가 여기를 벗어나면 스케일이 틀어진 것으로 본다.
+# (성인 기준 대략치이며, 정확한 값을 주장하려는 게 아니라 '말이 되는가'만 거른다)
+PLAUSIBLE_RATIO_TO_HEIGHT = {
+    'shoulder': (0.20, 0.30),
+    'chest': (0.21, 0.35),
+    'hip': (0.21, 0.35),
+    'torso_length': (0.24, 0.36),
+}
 
 POSE_LANDMARKS = {
     'nose': 0, 'left_shoulder': 11, 'right_shoulder': 12,
@@ -131,7 +142,7 @@ def measure(image, height_cm: float, pose_landmarks=None) -> BodyMeasurement:
     torso_px = _dist(shoulder_mid, hip_mid)
 
     shoulder_cm = shoulder_px / px_per_cm * SHOULDER_LANDMARK_TO_BREADTH
-    hip_width_cm = hip_px / px_per_cm
+    hip_width_cm = hip_px / px_per_cm * HIP_LANDMARK_TO_WIDTH
     torso_cm = torso_px / px_per_cm
 
     # 가슴 폭은 어깨~엉덩이 사이 가슴 높이에서의 실루엣 폭이 이상적이지만,
@@ -149,6 +160,8 @@ def measure(image, height_cm: float, pose_landmarks=None) -> BodyMeasurement:
         'hip_front_width': round(hip_width_cm, 1),
     }
 
+    warnings.extend(_implausible_notes(measurements, height_cm))
+
     return BodyMeasurement(
         height_cm=height_cm,
         px_per_cm=round(px_per_cm, 3),
@@ -157,6 +170,26 @@ def measure(image, height_cm: float, pose_landmarks=None) -> BodyMeasurement:
         warnings=warnings,
         landmark_visibility={k: round(v, 2) for k, v in visibility.items()},
     )
+
+
+def _implausible_notes(measurements: Dict[str, float], height_cm: float) -> List[str]:
+    """추정치가 인체 비율 범위를 벗어나면 이유를 남긴다.
+
+    대부분 픽셀->cm 스케일이 틀어졌을 때 발생한다. 사진이 잘려 있으면
+    '머리끝~발끝 = 키' 전제가 깨져서 모든 치수가 같은 비율로 부풀거나 줄어든다.
+    """
+    notes = []
+    for name, (low, high) in PLAUSIBLE_RATIO_TO_HEIGHT.items():
+        if name not in measurements:
+            continue
+        ratio = measurements[name] / height_cm
+        if not (low <= ratio <= high):
+            notes.append(
+                f'{name} {measurements[name]:.1f}cm 는 키 {height_cm:.0f}cm 대비 비율 '
+                f'{ratio:.2f} 로 상식 범위({low}~{high})를 벗어납니다. '
+                '사진이 잘렸거나 전신이 아니어서 스케일이 틀어졌을 가능성이 큽니다.'
+            )
+    return notes
 
 
 def _pixel_height(image, landmarks, seg_mask, w: int, h: int):
@@ -169,7 +202,19 @@ def _pixel_height(image, landmarks, seg_mask, w: int, h: int):
         if mask2d.ndim == 2:
             rows = np.where(np.any(mask2d > 0.5, axis=1))[0]
             if rows.size > 0:
-                return float(rows.max() - rows.min()), ''
+                top, bottom = int(rows.min()), int(rows.max())
+                # 몸이 위/아래 가장자리에 닿아 있으면 잘린 사진이다.
+                # 이때 '머리끝~발끝 = 키' 전제가 깨져 모든 치수가 함께 틀어진다.
+                cropped = []
+                if top <= 1:
+                    cropped.append('머리')
+                if bottom >= mask2d.shape[0] - 2:
+                    cropped.append('발')
+                note = ''
+                if cropped:
+                    note = (f"{'/'.join(cropped)} 쪽이 사진 밖으로 잘린 것 같습니다. "
+                            '전신이 다 나와야 키 기준 스케일이 맞습니다.')
+                return float(bottom - top), note
 
     # 폴백: 코~발목 거리에 머리 윗부분과 발 높이를 보정해서 더한다.
     nose_y = landmarks[POSE_LANDMARKS['nose']].y * h

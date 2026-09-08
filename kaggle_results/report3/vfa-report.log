@@ -1,0 +1,14 @@
+[{"stream_name":"stdout","time":2.307748579,"data":"bench dir: /kaggle/input/notebooks/jefferyjung/vfa-benchmark/bench\n"}
+,{"stream_name":"stdout","time":21.137987117,"data":"platform=kaggle scratch=/kaggle/tmp/scratch venv=/kaggle/tmp/venv39 out=/kaggle/working catvton=/kaggle/tmp/scratch/CatVTON\n"}
+,{"stream_name":"stdout","time":21.138014957,"data":"한글 폰트: 사용\n"}
+,{"stream_name":"stdout","time":21.138020327,"data":"45건 로드\n"}
+,{"stream_name":"stdout","time":22.113664422,"data":"격자 이미지: /kaggle/working/report/quality_grid.png\n"}
+,{"stream_name":"stdout","time":30.930792327,"data":"산점도: /kaggle/working/report/speed_quality.png\n"}
+,{"stream_name":"stdout","time":30.931080917,"data":"리포트: /kaggle/working/report/TEST_RESULTS.md\n"}
+,{"stream_name":"stderr","time":33.089363742,"data":"/usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":33.089443262,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":33.366562344,"data":"/usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":33.366594224,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":34.084163239,"data":"[NbConvertApp] Converting notebook __script__.ipynb to html\n"}
+,{"stream_name":"stderr","time":35.316114641,"data":"[NbConvertApp] Writing 281384 bytes to __results__.html\n"}
+]

@@ -39,7 +39,7 @@ import matplotlib  # noqa: E402
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-from PIL import Image, ImageDraw  # noqa: E402
+from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 from skimage.metrics import structural_similarity as ssim_fn  # noqa: E402
 
 _ap = argparse.ArgumentParser()
@@ -75,6 +75,19 @@ def _setup_font():
 
 
 HAS_KO_FONT = _setup_font()
+
+
+def _pil_font(size):
+    """PIL 기본 폰트는 한글을 못 그린다(두부 처리). 설치된 TTF를 직접 연다."""
+    from matplotlib import font_manager
+    for name in ('NanumGothic', 'NanumBarunGothic', 'Malgun Gothic', 'AppleGothic',
+                 'Noto Sans CJK KR', 'DejaVu Sans'):
+        try:
+            path = font_manager.findfont(name, fallback_to_default=False)
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
 LABELS = {
     True: dict(x='한 장 생성 시간 (초)', y='베이스라인 대비 SSIM',
                title='속도 / 품질 트레이드오프  (점 위 숫자 = 추론 스텝)',
@@ -133,8 +146,11 @@ def make_quality_grid(rows):
         return None
     qs.sort(key=lambda r: r['case_id'])
 
+    font_id = _pil_font(15)
+    font_note = _pil_font(13)
+
     cols = 4
-    cell_w, cell_h, label_h, pad = 220, 293, 34, 8
+    cell_w, cell_h, label_h, pad = 260, 347, 44, 10
     rows_n = (len(qs) + cols - 1) // cols
     width = cols * (cell_w + pad) + pad
     height = rows_n * (cell_h + label_h + pad) + pad
@@ -148,8 +164,10 @@ def make_quality_grid(rows):
         y = pad + cy * (cell_h + label_h + pad)
         img = Image.open(abs_out(r)).convert('RGB').resize((cell_w, cell_h), Image.LANCZOS)
         sheet.paste(img, (x, y))
-        draw.text((x, y + cell_h + 4), f"{r['case_id']}  {r['cloth_type']}", fill=TEXT_PRIMARY)
-        draw.text((x, y + cell_h + 18), r.get('note', '')[:38], fill=TEXT_SECONDARY)
+        draw.text((x, y + cell_h + 5), f"{r['case_id']}  {r['cloth_type']}",
+                  fill=TEXT_PRIMARY, font=font_id)
+        draw.text((x, y + cell_h + 24), r.get('note', '')[:30],
+                  fill=TEXT_SECONDARY, font=font_note)
 
     os.makedirs(REPORT_DIR, exist_ok=True)
     out = os.path.join(REPORT_DIR, 'quality_grid.png')

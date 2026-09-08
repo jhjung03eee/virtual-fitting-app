@@ -99,4 +99,5 @@ if __name__ == '__main__':
     print('모델 로딩 중... (최초 1회, 약 40초)', flush=True)
     load_models()
     print('로딩 완료. Gradio 실행합니다.', flush=True)
-    demo.queue().launch(share=True, show_error=True)
+    # show_api=False: API 스키마 생성 경로(gradio_client)가 pydantic 버전에 따라 터지는 걸 회피
+    demo.queue().launch(share=True, show_error=True, show_api=False)

@@ -23,9 +23,12 @@ if not os.path.exists(VENV_PY):
         '    !python /content/vfa/scripts/setup_py39_and_run.py\n'
     )
 
-# gradio는 setup 단계 의존성 목록에 없으므로 여기서 설치 (repo가 고정한 버전)
+# gradio는 setup 단계 의존성 목록에 없으므로 여기서 설치.
+# CatVTON repo는 4.39.0을 고정하지만 그 버전은 최신 pydantic과 조합 시
+#   TypeError: argument of type 'bool' is not iterable  (gradio_client/utils.py get_type)
+# 로 /info 라우트가 터진다. 4.44.1에서 수정됨. 모델 코드와는 무관한 UI 라이브러리라 올려도 안전.
 print('gradio 설치 중...', flush=True)
-subprocess.run([VENV_PY, '-m', 'pip', 'install', '-q', 'gradio==4.39.0'], check=True)
+subprocess.run([VENV_PY, '-m', 'pip', 'install', '-q', 'gradio==4.44.1'], check=True)
 
 # Colab이 걸어둔 inline 백엔드가 상속되면 venv쪽 matplotlib이 죽는다 (docs/ENVIRONMENT.md #7)
 env = dict(os.environ, MPLBACKEND='Agg')

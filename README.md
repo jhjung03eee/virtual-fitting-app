@@ -10,6 +10,7 @@
 - [x] CatVTON 파이프라인 구동 검증 (Colab T4, 30스텝 63초, 옷 합성 성공)
 - [x] 환경 구성 문제 전부 규명 및 문서화 → `docs/ENVIRONMENT.md`
 - [x] **AutoMasker(DensePose+SCHP) 포함 원본 그대로 구동 완료** (Python 3.9 venv, T4, 추론 71초)
+- [x] Gradio 웹 UI 구동 확인 (Colab T4, 한 장 약 70초)
 - [ ] 팀원 실제 사진 + 쇼핑몰 옷 이미지로 테스트, 실패 케이스 수집
 - [ ] MediaPipe Pose로 체형(어깨너비 등) 추정 + 키 기반 스케일 보정
 - [ ] 옷 치수표 대비 여유분 계산 → S/M/L 추천

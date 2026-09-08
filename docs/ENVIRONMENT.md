@@ -64,6 +64,27 @@ Colab이 `MPLBACKEND` 환경변수를 inline 백엔드로 설정해두는데, �
 venv 안의 matplotlib이 그 백엔드를 못 찾아 죽는다.
 → 워커 실행 시 `MPLBACKEND=Agg`로 덮어쓸 것.
 
+### 8. `TypeError: argument of type 'bool' is not iterable` (gradio)
+Gradio 앱을 띄우면 페이지가 안 열리고 이 에러가 반복된다.
+pydantic이 만드는 JSON 스키마에는 `additionalProperties: true` 처럼 값이 dict가 아니라
+bool인 항목이 있는데, `gradio_client/utils.py`의 `get_type()`이 dict로 가정하고
+`"const" in schema` 를 실행해서 터진다.
+
+- gradio 4.44.1로 올려도 발생한다.
+- `launch(show_api=False)` 로도 못 막는다 — 메인 라우트(`routes.py`)가 옵션과 무관하게
+  `api_info()`를 호출한다.
+- **해결**: venv에 설치된 `gradio_client/utils.py`의 `get_type` / `_json_schema_to_python_type`
+  앞에 `if not isinstance(schema, dict): return "Any"` 가드를 삽입한다.
+  `scripts/run_gradio_colab.py`가 실행 시 자동으로 패치한다(멱등).
+
+### 9. Gradio 공개 링크가 출력되지 않음
+`로딩 완료` 까지 찍히고 `Running on public URL: ...` 이 안 보인다. 앱은 정상 실행 중인데
+**출력 버퍼링** 때문에 안 보이는 것.
+자식 프로세스의 stdout이 파이프면 블록 버퍼링(4KB)이라, `flush=True` 없는 gradio 내부
+print가 버퍼에 갇힌다.
+→ 자식을 `python -u` 로 실행하고 `PYTHONUNBUFFERED=1` 을 준다. 추가로 `launch(prevent_thread_lock=True)`
+가 반환하는 URL을 직접 `flush=True`로 출력한 뒤 `demo.block_thread()` 로 대기한다.
+
 ## 검증된 실행 방법
 
 ### A. Colab + Python 3.9 venv (권장, AutoMasker 포함 전부 동작)

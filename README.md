@@ -39,7 +39,17 @@ outputs/                             결과
 ## 빠른 시작 (Colab)
 
 1. Colab에서 새 노트북 → **런타임 유형 변경 → T4 GPU** (P100은 최신 torch에서 지원 종료됨)
-2. `scripts/setup_py39_and_run.py` 내용을 셀에 붙여넣고 실행
+2. `scripts/setup_py39_and_run.py` 내용을 셀에 붙여넣고 실행 (Python 3.9 환경 구성, 최초 1회 ~4분)
+3. 웹 UI를 띄우려면 셀 두 개만 실행:
+
+```python
+!git clone -q https://github.com/jhjung03eee/virtual-fitting-app.git /content/vfa
+```
+```python
+!python /content/vfa/scripts/run_gradio_colab.py
+```
+
+출력에 뜨는 `*.gradio.live` 링크로 접속하면 사진 2장을 올려 피팅을 해볼 수 있습니다.
 
 Python 3.9 환경을 따로 만드는 이유는 `docs/ENVIRONMENT.md` 참고 —
 **repo에 cp39 전용으로 컴파일된 detectron2 바이너리가 들어있어서 Python 3.12에서는 import가 안 된다.**

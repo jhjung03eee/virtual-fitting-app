@@ -14,10 +14,13 @@ import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO_ROOT, 'app'))
-from paths import VENV_PY, OUT_ROOT, child_env, describe  # noqa: E402
+from paths import VENV_PY, OUT_ROOT, PLATFORM, child_env, describe  # noqa: E402
 
 
 def _reexec_in_venv():
+    # 이미 적절한 파이썬으로 실행 중이면(예: 리포트 전용 커널) 재실행을 건너뛴다
+    if os.environ.get('VFA_NO_REEXEC') == '1':
+        return
     """venv39 인터프리터가 아니면 그걸로 다시 실행한다."""
     if os.path.abspath(sys.executable) == os.path.abspath(VENV_PY):
         return
@@ -36,11 +39,15 @@ _reexec_in_venv()
 sys.path.insert(0, os.path.join(REPO_ROOT, 'app'))
 import glob  # noqa: E402
 from tryon_core import try_on, load_models, REPO_DIR  # noqa: E402
+import torch  # noqa: E402
+
+GPU_NAME = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'
 
 BENCH_ROOT = os.path.join(OUT_ROOT, 'bench')
 CSV_PATH = os.path.join(BENCH_ROOT, 'results.csv')
 FIELDS = ['suite', 'case_id', 'person', 'garment', 'cloth_type', 'scheduler',
-          'steps', 'guidance', 'seed', 'mask_s', 'diffusion_s', 'total_s', 'out_path']
+          'steps', 'guidance', 'seed', 'mask_s', 'diffusion_s', 'total_s', 'out_path',
+          'platform', 'gpu']
 
 DEMO = os.path.join(REPO_DIR, 'resource/demo/example')
 
@@ -174,6 +181,8 @@ def main():
                                      'scheduler', 'steps', 'guidance', 'seed', 'note')}
         row.update(timing)
         row['out_path'] = out_path
+        row['platform'] = PLATFORM
+        row['gpu'] = GPU_NAME
         append_row(row)
         print(f'    {timing["total_s"]}s (mask {timing["mask_s"]}s / diffusion {timing["diffusion_s"]}s)',
               flush=True)

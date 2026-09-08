@@ -1,0 +1,15 @@
+{
+  "id": "jefferyjung/vfa-report",
+  "title": "VFA report",
+  "code_file": "make_report_only.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": ["jefferyjung/vfa-benchmark"],
+  "model_sources": []
+}

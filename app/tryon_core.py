@@ -1,10 +1,11 @@
-"""CatVTON 추론 로직 — Gradio 앱과 배치 워커가 공유하는 단일 소스.
+"""CatVTON 추론 로직 — Gradio 앱과 벤치마크가 공유하는 단일 소스.
 
 반드시 Python 3.9 venv에서 실행할 것 (detectron2 .so가 cp39 전용).
 자세한 이유는 docs/ENVIRONMENT.md 참고.
 """
 import os
 import sys
+import time
 
 import torch
 from PIL import Image
@@ -15,6 +16,7 @@ CATVTON_REPO_ID = 'zhengchong/CatVTON'
 
 WIDTH, HEIGHT = 768, 1024
 CLOTH_TYPES = ['upper', 'lower', 'overall', 'inner', 'outer']
+SCHEDULERS = ['ddim', 'dpm']
 
 _models = None
 
@@ -68,15 +70,28 @@ def _to_image(x):
     return Image.open(x) if isinstance(x, str) else x
 
 
-def try_on(person, garment, cloth_type='upper', steps=30, guidance_scale=2.5, seed=42):
+def _sync():
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+
+def try_on(person, garment, cloth_type='upper', steps=30, guidance_scale=2.5, seed=42,
+           scheduler='ddim', eta=1.0, return_timing=False):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
     cloth_type: CLOTH_TYPES 중 하나
-    반환: (합성 결과, 마스크를 얹은 인물 이미지)
+    scheduler: 'ddim'(기본) 또는 'dpm'(DPMSolverMultistep, 적은 스텝에서 유리)
+    eta: DDIM 확률성. 1.0이면 DDPM에 가깝고 0.0이면 결정적. DPM++에서는 무시된다.
+        (repo 기본값이 1.0이라 그대로 둔다)
+    guidance_scale: 1.0 이하면 CFG가 꺼져 배치가 절반 -> 약 2배 빠름
+
+    반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
     if cloth_type not in CLOTH_TYPES:
         raise ValueError(f'cloth_type must be one of {CLOTH_TYPES}, got {cloth_type!r}')
+    if scheduler not in SCHEDULERS:
+        raise ValueError(f'scheduler must be one of {SCHEDULERS}, got {scheduler!r}')
 
     pipeline, automasker, mask_processor, device = load_models()
 
@@ -86,17 +101,42 @@ def try_on(person, garment, cloth_type='upper', steps=30, guidance_scale=2.5, se
     person = resize_and_crop(_to_image(person).convert('RGB'), (WIDTH, HEIGHT))
     garment = resize_and_padding(_to_image(garment).convert('RGB'), (WIDTH, HEIGHT))
 
+    _sync()
+    t0 = time.perf_counter()
     mask = automasker(person, cloth_type)['mask']
     mask = mask_processor.blur(mask, blur_factor=9)
+    _sync()
+    t1 = time.perf_counter()
 
-    generator = torch.Generator(device=device).manual_seed(seed) if seed != -1 else None
-    result = pipeline(
-        image=person,
-        condition_image=garment,
-        mask=mask,
-        num_inference_steps=steps,
-        guidance_scale=guidance_scale,
-        generator=generator,
-    )[0]
+    original_scheduler = pipeline.noise_scheduler
+    if scheduler == 'dpm':
+        from diffusers import DPMSolverMultistepScheduler
+        pipeline.noise_scheduler = DPMSolverMultistepScheduler.from_config(
+            original_scheduler.config
+        )
 
-    return result, vis_mask(person, mask)
+    try:
+        generator = torch.Generator(device=device).manual_seed(seed) if seed != -1 else None
+        result = pipeline(
+            image=person,
+            condition_image=garment,
+            mask=mask,
+            num_inference_steps=steps,
+            guidance_scale=guidance_scale,
+            generator=generator,
+            eta=eta,
+        )[0]
+        _sync()
+    finally:
+        pipeline.noise_scheduler = original_scheduler
+
+    t2 = time.perf_counter()
+
+    mask_vis = vis_mask(person, mask)
+    if return_timing:
+        return result, mask_vis, {
+            'mask_s': round(t1 - t0, 2),
+            'diffusion_s': round(t2 - t1, 2),
+            'total_s': round(t2 - t0, 2),
+        }
+    return result, mask_vis

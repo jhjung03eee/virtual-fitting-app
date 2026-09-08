@@ -11,7 +11,12 @@ VENV_PY = '/content/venv39/bin/python'
 APP_DIR = '/content/app'
 
 if not os.path.exists(VENV_PY):
-    sys.exit('venv39가 없습니다. scripts/setup_py39_and_run.py 를 먼저 실행하세요.')
+    sys.exit(
+        'Python 3.9 환경(/content/venv39)이 없습니다.\n'
+        '런타임이 재시작되면 /content 아래가 전부 사라지므로 환경 구성부터 다시 해야 합니다.\n\n'
+        '아래 셀을 먼저 실행하세요 (최초 1회, 약 5분):\n'
+        '    !python /content/vfa/scripts/setup_py39_and_run.py\n'
+    )
 
 # gradio는 setup 단계 의존성 목록에 없으므로 여기서 설치 (repo가 고정한 버전)
 print('gradio 설치 중...', flush=True)

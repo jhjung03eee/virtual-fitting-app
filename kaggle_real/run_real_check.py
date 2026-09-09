@@ -24,18 +24,21 @@ if not os.path.exists(REPO_DIR):
 print('repo:', REPO_DIR, flush=True)
 
 if not os.path.isdir(GARMENTS):
-    # 데이터셋이 다른 이름으로 붙었을 수 있다. /kaggle/input 아래에서
-    # 이미지가 들어 있는 폴더를 찾아 쓴다.
-    listing = sorted(os.listdir('/kaggle/input')) if os.path.isdir('/kaggle/input') else []
-    found = [os.path.join('/kaggle/input', name) for name in listing
-             if os.path.isdir(os.path.join('/kaggle/input', name))
-             and any(f.lower().endswith(('.jpg', '.jpeg', '.png'))
-                     for f in os.listdir(os.path.join('/kaggle/input', name)))]
+    # 데이터셋이 /kaggle/input 바로 아래가 아니라 몇 단계 안쪽에 붙기도 한다
+    # (실제로 /kaggle/input/datasets/... 로 들어왔다). 이미지가 들어 있는
+    # 폴더를 재귀로 찾는다.
+    found = []
+    for root, _dirs, files in os.walk('/kaggle/input'):
+        if any(f.lower().endswith(('.jpg', '.jpeg', '.png')) for f in files):
+            found.append(root)
     if not found:
+        tree = []
+        for root, _dirs, files in os.walk('/kaggle/input'):
+            tree.append(f'  {root}: {sorted(files)[:5]}')
         sys.exit(f'옷 사진 데이터셋이 없습니다: {GARMENTS}\n'
-                 f'/kaggle/input 내용: {listing or "(비어 있음)"}\n'
+                 + ('\n'.join(tree[:20]) or '  /kaggle/input 이 비어 있습니다') + '\n'
                  '커널 설정에서 vfa-real-garments 데이터셋을 추가했는지 확인하세요.')
-    GARMENTS = found[0]
+    GARMENTS = sorted(found, key=len)[0]
     print('데이터셋을 다른 경로에서 찾았습니다:', GARMENTS, flush=True)
 print('옷 사진:', sorted(os.listdir(GARMENTS)), flush=True)
 

@@ -8,7 +8,7 @@ import sys
 import time
 
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paths import CATVTON_REPO as REPO_DIR  # noqa: E402
@@ -69,7 +69,15 @@ def load_models(device='cuda', mixed_precision='fp16'):
 
 
 def _to_image(x):
-    return Image.open(x) if isinstance(x, str) else x
+    """경로나 PIL 이미지를 받아 **EXIF 회전을 적용한** 이미지로 돌려준다.
+
+    폰으로 찍은 사진은 센서 방향 그대로 가로로 저장하고 EXIF orientation 태그로
+    "세로로 보여라"라고 표시한다. PIL의 Image.open()은 이 태그를 적용하지 않으므로
+    그냥 쓰면 **인물이 옆으로 누운 채 합성된다.** 사용자가 올리는 사진은 대부분
+    폰 사진이라 반드시 처리해야 한다.
+    """
+    image = Image.open(x) if isinstance(x, str) else x
+    return ImageOps.exif_transpose(image)
 
 
 def _sync():

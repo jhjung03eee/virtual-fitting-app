@@ -40,7 +40,7 @@ _gcu.get_type = _safe_get_type
 # -------------------------------------------------------------------------
 
 from tryon_core import (try_on, load_models, REPO_DIR,
-                        DEFAULT_STEPS, DEFAULT_SCHEDULER)
+                        DEFAULT_STEPS, DEFAULT_SCHEDULER, DEFAULT_GUIDANCE)
 from body_profile import BodyProfile
 from size_fit import SizeChart, recommend
 
@@ -175,7 +175,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
         '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다. '
         '옷 영역 마스크는 자동으로 잡습니다 (DensePose + SCHP).\n\n'
         '- 인물은 **정면 전신, 정자세** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 20초 (DPM++ 8스텝 기본값)'
+        '- T4 GPU 기준 한 장에 약 7초 (DPM++ 4스텝, CFG 끔)'
     )
 
     with gr.Row():
@@ -210,9 +210,12 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 )
                 steps_in = gr.Slider(
                     4, 50, value=DEFAULT_STEPS, step=1,
-                    label='추론 스텝 (DPM++는 8이면 30과 거의 같음. DDIM은 30 권장)',
+                    label='추론 스텝 (DPM++는 4~8이면 충분. DDIM은 30 권장)',
                 )
-                guidance_in = gr.Slider(1.0, 7.5, value=2.5, step=0.1, label='guidance scale')
+                guidance_in = gr.Slider(
+                    1.0, 7.5, value=DEFAULT_GUIDANCE, step=0.1,
+                    label='guidance scale (1.0이면 CFG 꺼져 2배 빠름. 옷 반영이 약하면 2.5로)',
+                )
                 seed_in = gr.Number(value=42, precision=0, label='시드 (-1이면 매번 랜덤)')
             run_btn = gr.Button('피팅 해보기', variant='primary')
 

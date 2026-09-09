@@ -77,15 +77,24 @@ def _sync():
         torch.cuda.synchronize()
 
 
-# 기본값 근거: 벤치마크 45건 결과 DPM++ 8스텝이 같은 샘플러 30스텝 대비 SSIM 0.984로
-# 눈으로 구별하기 어려우면서 3.5배 빠르다. DDIM은 스텝을 줄이면 무너지므로(4스텝 0.895)
-# 스텝만 줄이는 게 아니라 샘플러를 바꾸는 것이 핵심이다. docs/TEST_RESULTS.md 참고.
+# 기본값 근거 (docs/TEST_RESULTS.md 벤치마크 45건 + 육안 비교):
+#   - DDIM은 스텝을 줄이면 형체가 무너진다(4스텝 SSIM 0.895). 스텝만 줄이는 게 아니라
+#     샘플러를 DPM++로 바꾸는 것이 핵심이다.
+#   - DPM++는 4스텝에서도 30스텝과 실루엣·질감·색이 거의 같다.
+#   - CFG는 guidance_scale > 1 일 때만 배치를 2배로 만든다. 끄면 정확히 2배 빨라진다.
+# 합쳐서 T4 기준 약 7초 (DDIM 30스텝 73초 대비 10배).
+#
+# 주의: CFG를 끄면 옷 반영 강도가 약해질 수 있다. 검증한 건 색과 형태가 뚜렷한 옷
+# 한 벌뿐이므로, 무늬가 복잡하거나 색이 흐린 옷에서 반영이 약하면
+# guidance_scale=2.5로 올리거나 steps를 8로 늘려서 쓴다.
 DEFAULT_SCHEDULER = 'dpm'
-DEFAULT_STEPS = 8
+DEFAULT_STEPS = 4
+DEFAULT_GUIDANCE = 1.0  # 1.0 이하 = CFG 끔
 
 
-def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS, guidance_scale=2.5,
-           seed=42, scheduler=DEFAULT_SCHEDULER, eta=1.0, return_timing=False):
+def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
+           guidance_scale=DEFAULT_GUIDANCE, seed=42, scheduler=DEFAULT_SCHEDULER,
+           eta=1.0, return_timing=False):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image

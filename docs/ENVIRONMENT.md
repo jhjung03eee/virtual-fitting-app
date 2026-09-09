@@ -85,6 +85,22 @@ print가 버퍼에 갇힌다.
 → 자식을 `python -u` 로 실행하고 `PYTHONUNBUFFERED=1` 을 준다. 추가로 `launch(prevent_thread_lock=True)`
 가 반환하는 URL을 직접 `flush=True`로 출력한 뒤 `demo.block_thread()` 로 대기한다.
 
+### 10. `torch.compile`이 조용히 무시된다 (Kaggle P100)
+가속 실험에서 `torch.compile`을 켠 설정과 안 켠 설정의 시간이 소수점까지 같았다.
+"컴파일했는데 이득이 없다"로 읽기 쉽지만 사실은 **컴파일이 되지 않았다.**
+
+`torch.compile`의 기본 백엔드(Inductor)는 Triton으로 커널을 만드는데
+**Triton은 compute capability 7.0 이상**을 요구한다. Kaggle 기본 GPU인
+P100은 **6.0**이라 조건에 못 미치고, 이때 torch.compile은 예외를 던지지 않고
+**조용히 eager 실행으로 되돌아간다.** 로그에 아무것도 안 남아서
+"효과 없음"과 "동작 안 함"이 구별되지 않는다 — 결론이 정반대인데도.
+
+→ 가속 실험 전에 `torch.cuda.get_device_capability()`를 찍고, 작은 함수를
+   실제로 컴파일해봐서 되는지 확인할 것 (`scripts/speed_opt_check.py`의 `compile_probe`).
+→ T4는 7.5라 조건을 만족한다. **Kaggle에서 GPU 종류는 kernel-metadata.json으로
+   못 바꾼다** (`"gpu": "T4 x2"` 를 넣어도 무시됨). 커널 페이지의 Settings →
+   Accelerator 에서 직접 바꿔야 한다.
+
 ## 검증된 실행 방법
 
 ### A. Colab + Python 3.9 venv (권장, AutoMasker 포함 전부 동작)

@@ -77,19 +77,22 @@ def _sync():
         torch.cuda.synchronize()
 
 
-# 기본값 근거 (docs/TEST_RESULTS.md 벤치마크 45건 + 육안 비교):
+# 기본값 근거 (docs/TEST_RESULTS.md 벤치마크 45건 + 실제 상품 3벌 검증):
 #   - DDIM은 스텝을 줄이면 형체가 무너진다(4스텝 SSIM 0.895). 스텝만 줄이는 게 아니라
 #     샘플러를 DPM++로 바꾸는 것이 핵심이다.
-#   - DPM++는 4스텝에서도 30스텝과 실루엣·질감·색이 거의 같다.
-#   - CFG는 guidance_scale > 1 일 때만 배치를 2배로 만든다. 끄면 정확히 2배 빨라진다.
-# 합쳐서 T4 기준 약 7초 (DDIM 30스텝 73초 대비 10배).
+#   - DPM++ 8스텝은 30스텝과 눈으로 구별하기 어려우면서 3.5배 빠르다.
 #
-# 주의: CFG를 끄면 옷 반영 강도가 약해질 수 있다. 검증한 건 색과 형태가 뚜렷한 옷
-# 한 벌뿐이므로, 무늬가 복잡하거나 색이 흐린 옷에서 반영이 약하면
-# guidance_scale=2.5로 올리거나 steps를 8로 늘려서 쓴다.
+# CFG를 끄면(guidance_scale=1.0) 배치가 절반이 되어 정확히 2배 빨라지지만,
+# **옷이 무너진다.** 실제 상품으로 확인한 결과:
+#   - 무지 코듀로이 바지: 멀쩡함
+#   - 큰 영문 텍스트 맨투맨: 글자가 흐려짐
+#   - 사진 프린트 티셔츠: 옷이 통째로 뭉개져 알아볼 수 없는 무늬가 됨
+# 데모 카디건 한 벌로만 보고 CFG를 껐던 것이 잘못이었다. CFG는 켜 둔다.
+#
+# 스텝도 4로 줄이면 사진 프린트가 작은 얼룩으로 쪼그라든다. 8스텝은 유지된다.
 DEFAULT_SCHEDULER = 'dpm'
-DEFAULT_STEPS = 4
-DEFAULT_GUIDANCE = 1.0  # 1.0 이하 = CFG 끔
+DEFAULT_STEPS = 8
+DEFAULT_GUIDANCE = 2.5  # 1.0 이하면 CFG가 꺼져 2배 빨라지지만 옷이 무너진다
 
 
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,

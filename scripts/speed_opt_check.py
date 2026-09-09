@@ -221,8 +221,8 @@ def main():
     last = [float(r['diffusion_s']) for r in rows if r['variant'] == VARIANTS[-1][0]]
     if first and last:
         drift = (sum(last) / len(last)) - (sum(first) / len(first))
-        print(f'
-같은 설정의 처음/마지막 차이(드리프트): {drift:+.1f}초', flush=True)
+        print('', flush=True)
+        print(f'같은 설정의 처음/마지막 차이(드리프트): {drift:+.1f}초', flush=True)
         print('이 값보다 작은 차이는 최적화 효과로 볼 수 없다.', flush=True)
 
 

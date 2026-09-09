@@ -41,7 +41,10 @@ _reexec_in_venv()
 import glob  # noqa: E402
 
 import torch  # noqa: E402
-from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+from PIL import Image  # noqa: E402
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from compare_grid import build_grid  # noqa: E402
 
 from tryon_core import try_on, load_models, REPO_DIR  # noqa: E402
 
@@ -82,19 +85,6 @@ def find_garments(directory):
         found += glob.glob(os.path.join(directory, f'*.{ext}'))
     return sorted(p for p in found
                   if not os.path.splitext(os.path.basename(p))[0].endswith('_size'))
-
-
-def _pil_font(size):
-    """PIL 기본 폰트는 한글을 못 그린다(두부 처리). 설치된 TTF를 직접 연다."""
-    from matplotlib import font_manager
-    for name in ('NanumGothic', 'NanumBarunGothic', 'Malgun Gothic', 'AppleGothic',
-                 'Noto Sans CJK KR', 'DejaVu Sans'):
-        try:
-            return ImageFont.truetype(
-                font_manager.findfont(name, fallback_to_default=False), size)
-        except Exception:
-            continue
-    return ImageFont.load_default()
 
 
 def ssim_against(reference_path, path, mask=None):
@@ -146,46 +136,6 @@ def append_row(row):
         if is_new:
             writer.writeheader()
         writer.writerow(row)
-
-
-def build_grid(garment_path, person_path, results, out_path):
-    """옷 사진 + 설정별 결과를 한 장에 나란히 붙인다.
-
-    표로 숫자만 보면 '옷이 제대로 반영됐는지'는 알 수 없다. 눈으로 비교하는 게
-    이 실험의 목적이므로 그리드가 본체다.
-    """
-    cell_w, cell_h = 288, 384
-    pad, header, caption = 12, 34, 40
-    columns = [('옷 사진', garment_path, None, None)] + [
-        (label, path, seconds, ssim) for label, path, seconds, ssim in results
-    ]
-
-    width = pad + len(columns) * (cell_w + pad)
-    height = header + cell_h + caption + pad * 2
-    canvas = Image.new('RGB', (width, height), 'white')
-    draw = ImageDraw.Draw(canvas)
-    font_title = _pil_font(16)
-    font_note = _pil_font(14)
-
-    for index, (label, path, seconds, ssim) in enumerate(columns):
-        x = pad + index * (cell_w + pad)
-        thumb = Image.open(path).convert('RGB')
-        thumb.thumbnail((cell_w, cell_h))
-        offset = x + (cell_w - thumb.width) // 2
-        canvas.paste(thumb, (offset, header + pad))
-        draw.text((x, pad), label, fill='black', font=font_title)
-        if seconds is not None:
-            note = f'{seconds:.1f}초'
-            if ssim is not None:
-                note += f'   옷 SSIM {ssim:.3f}'
-            draw.text((x, header + pad + cell_h + 6), note, fill='#444', font=font_note)
-
-    name = os.path.splitext(os.path.basename(garment_path))[0]
-    draw.text((pad, height - 22),
-              f'{name} · 인물 {os.path.basename(person_path)} · {PLATFORM} {GPU_NAME}',
-              fill='#888', font=font_note)
-    canvas.save(out_path)
-    return out_path
 
 
 def main():
@@ -259,8 +209,9 @@ def main():
                     'platform': PLATFORM, 'gpu': GPU_NAME,
                 })
 
-        grid = build_grid(garment, person, results,
-                          os.path.join(OUT_DIR, f'compare_{name}.png'))
+        grid = build_grid(
+            garment, results, os.path.join(OUT_DIR, f'compare_{name}.png'),
+            caption=f'{name} · 인물 {os.path.basename(person)} · {PLATFORM} {GPU_NAME}')
         print(f'  그리드 -> {grid}\n', flush=True)
 
     print('=== 결과 ===', flush=True)

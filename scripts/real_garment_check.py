@@ -56,17 +56,30 @@ FIELDS = ['garment', 'cloth_type', 'config', 'scheduler', 'steps', 'guidance',
           'mask_s', 'diffusion_s', 'total_s', 'ssim_vs_ref', 'ssim_garment',
           'out_path', 'platform', 'gpu']
 
-# (표시명, 스케줄러, 스텝, guidance). 첫 항목이 SSIM 기준점이다.
-#
-# CFG 끄기는 실제 상품 검증에서 탈락했다(사진 프린트 옷이 붕괴). 이제 남은 축은
-# 스텝 수뿐이라, 8스텝(안전)과 4스텝(프린트가 쪼그라듦) 사이를 촘촘히 본다.
-CONFIGS = [
-    ('기준 30스텝', 'dpm', 30, 2.5),
-    ('8스텝 (현재 기본값)', 'dpm', 8, 2.5),
-    ('6스텝', 'dpm', 6, 2.5),
-    ('5스텝', 'dpm', 5, 2.5),
-    ('4스텝', 'dpm', 4, 2.5),
-]
+# (표시명, 스케줄러, 스텝, guidance). 각 묶음의 첫 항목이 SSIM 기준점이다.
+CONFIG_SETS = {
+    # 스텝을 얼마나 줄일 수 있는지 (속도 관점)
+    'steps': [
+        ('기준 30스텝', 'dpm', 30, 2.5),
+        ('8스텝 (현재 기본값)', 'dpm', 8, 2.5),
+        ('6스텝', 'dpm', 6, 2.5),
+        ('5스텝', 'dpm', 5, 2.5),
+        ('4스텝', 'dpm', 4, 2.5),
+    ],
+    # 이 모델로 낼 수 있는 최선이 어디인지 (품질 관점).
+    # 실제 사진에서 하의 색과 프린트가 무너졌는데, 그게 우리가 속도를 위해
+    # 깎은 설정 탓인지 모델의 한계인지 갈라야 다음 결정이 선다.
+    'quality': [
+        ('원본 설정 DDIM 30 g2.5', 'ddim', 30, 2.5),
+        ('DPM 30 g2.5', 'dpm', 30, 2.5),
+        ('DPM 30 g5.0', 'dpm', 30, 5.0),
+        ('DPM 30 g7.5', 'dpm', 30, 7.5),
+        ('DPM 8 g5.0', 'dpm', 8, 5.0),
+        ('DPM 8 g2.5 (현재 기본값)', 'dpm', 8, 2.5),
+    ],
+}
+CONFIGS = CONFIG_SETS['steps']
+
 
 # 파일명으로 상/하의를 가른다. 옷 종류를 틀리면 엉뚱한 부위에 합성된다
 # (상의 이미지에 cloth_type='lower'를 주면 회색 트레이닝 바지가 나온다).
@@ -144,7 +157,12 @@ def main():
                     help='옷 사진이 든 폴더 (치수표 *_size.* 는 자동 제외)')
     ap.add_argument('--person', default=None, help='인물 사진 (생략 시 저장소 데모)')
     ap.add_argument('--seed', type=int, default=42)
+    ap.add_argument('--config-set', default='steps', choices=sorted(CONFIG_SETS),
+                    help="steps=스텝을 얼마나 줄일 수 있나 / quality=이 모델의 천장이 어디인가")
     args = ap.parse_args()
+
+    global CONFIGS
+    CONFIGS = CONFIG_SETS[args.config_set]
 
     garments = find_garments(args.garments)
     if not garments:

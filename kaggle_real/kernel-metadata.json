@@ -1,0 +1,15 @@
+{
+  "id": "jefferyjung/vfa-real-garments-check",
+  "title": "VFA real garment check",
+  "code_file": "run_real_check.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": ["jefferyjung/vfa-real-garments"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

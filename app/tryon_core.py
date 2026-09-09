@@ -124,7 +124,7 @@ DEFAULT_GUIDANCE = 2.5  # 1.0 이하면 CFG가 꺼져 2배 빨라지지만 옷�
 
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
            guidance_scale=DEFAULT_GUIDANCE, seed=42, scheduler=DEFAULT_SCHEDULER,
-           eta=1.0, return_timing=False):
+           eta=1.0, return_timing=False, composite=True):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
@@ -133,6 +133,7 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     eta: DDIM 확률성. 1.0이면 DDPM에 가깝고 0.0이면 결정적. DPM++에서는 무시된다.
         (repo 기본값이 1.0이라 그대로 둔다)
     guidance_scale: 1.0 이하면 CFG가 꺼져 배치가 절반 -> 약 2배 빠름
+    composite: 마스크 밖을 원본 사진으로 되돌린다. 아래 주석 참고
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
@@ -179,6 +180,19 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         pipeline.noise_scheduler = original_scheduler
 
     t2 = time.perf_counter()
+
+    if composite:
+        # CatVTON 파이프라인은 latent 전체를 디코딩해 돌려준다. 즉 **마스크 밖도
+        # 다시 생성된다.** 얼굴·손·배경이 VAE를 왕복하며 뭉개지고, guidance를
+        # 올리면 그 열화가 눈에 띄게 커진다 — 실제 사진에서 g5.0 이상이면 얼굴이
+        # 일그러지고 배경이 물감처럼 번졌다.
+        #
+        # 인페인팅에서는 마스크 밖을 원본으로 되돌리는 것이 표준이다. 그렇게 하면
+        # 바뀌는 곳이 옷 영역뿐이므로, 옷 반영을 강하게 주면서도 얼굴과 배경을
+        # 지킬 수 있다. 마스크가 blur되어 있어 경계는 자연스럽게 섞인다.
+        if result.size != person.size:
+            result = result.resize(person.size, Image.LANCZOS)
+        result = Image.composite(result, person, mask.convert('L'))
 
     mask_vis = vis_mask(person, mask)
     if return_timing:

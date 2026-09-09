@@ -60,22 +60,30 @@ FIELDS = ['garment', 'cloth_type', 'config', 'scheduler', 'steps', 'guidance',
 CONFIG_SETS = {
     # 스텝을 얼마나 줄일 수 있는지 (속도 관점)
     'steps': [
-        ('기준 30스텝', 'dpm', 30, 2.5),
-        ('8스텝 (현재 기본값)', 'dpm', 8, 2.5),
-        ('6스텝', 'dpm', 6, 2.5),
-        ('5스텝', 'dpm', 5, 2.5),
-        ('4스텝', 'dpm', 4, 2.5),
+        ('기준 30스텝', 'dpm', 30, 2.5, True),
+        ('8스텝 (현재 기본값)', 'dpm', 8, 2.5, True),
+        ('6스텝', 'dpm', 6, 2.5, True),
+        ('5스텝', 'dpm', 5, 2.5, True),
+        ('4스텝', 'dpm', 4, 2.5, True),
     ],
-    # 이 모델로 낼 수 있는 최선이 어디인지 (품질 관점).
-    # 실제 사진에서 하의 색과 프린트가 무너졌는데, 그게 우리가 속도를 위해
-    # 깎은 설정 탓인지 모델의 한계인지 갈라야 다음 결정이 선다.
+    # 이 모델로 낼 수 있는 최선이 어디인지 (품질 관점)
     'quality': [
-        ('원본 설정 DDIM 30 g2.5', 'ddim', 30, 2.5),
-        ('DPM 30 g2.5', 'dpm', 30, 2.5),
-        ('DPM 30 g5.0', 'dpm', 30, 5.0),
-        ('DPM 30 g7.5', 'dpm', 30, 7.5),
-        ('DPM 8 g5.0', 'dpm', 8, 5.0),
-        ('DPM 8 g2.5 (현재 기본값)', 'dpm', 8, 2.5),
+        ('원본 설정 DDIM 30 g2.5', 'ddim', 30, 2.5, True),
+        ('DPM 30 g2.5', 'dpm', 30, 2.5, True),
+        ('DPM 30 g5.0', 'dpm', 30, 5.0, True),
+        ('DPM 30 g7.5', 'dpm', 30, 7.5, True),
+        ('DPM 8 g5.0', 'dpm', 8, 5.0, True),
+        ('DPM 8 g2.5 (현재 기본값)', 'dpm', 8, 2.5, True),
+    ],
+    # 마스크 밖을 원본으로 되돌리면(composite) guidance를 올려도 얼굴·배경이
+    # 안 망가지는지. 망가지지 않는다면 옷 반영을 강하게 줄 수 있게 된다.
+    'composite': [
+        ('합성없음 g2.5 (지금까지)', 'dpm', 8, 2.5, False),
+        ('합성 g2.5', 'dpm', 8, 2.5, True),
+        ('합성없음 g5.0', 'dpm', 8, 5.0, False),
+        ('합성 g5.0', 'dpm', 8, 5.0, True),
+        ('합성 g7.5', 'dpm', 8, 7.5, True),
+        ('합성 30스텝 g5.0', 'dpm', 30, 5.0, True),
     ],
 }
 CONFIGS = CONFIG_SETS['steps']
@@ -192,8 +200,10 @@ def main():
         mask = masks[cloth_type]
 
         results, reference_path = [], None
-        for label, scheduler, steps, guidance in CONFIGS:
+        for label, scheduler, steps, guidance, composite in CONFIGS:
             slug = f'{name}_{scheduler}{steps}_g{guidance:g}'
+            if not composite:
+                slug += '_nocomp'
             out_path = os.path.join(OUT_DIR, f'{slug}.png')
 
             if os.path.exists(out_path):
@@ -203,7 +213,7 @@ def main():
                 result, _mask, timing = try_on(
                     person=person, garment=garment, cloth_type=cloth_type,
                     steps=steps, guidance_scale=guidance, seed=args.seed,
-                    scheduler=scheduler, return_timing=True,
+                    scheduler=scheduler, return_timing=True, composite=composite,
                 )
                 result.save(out_path)
                 seconds = timing['total_s']

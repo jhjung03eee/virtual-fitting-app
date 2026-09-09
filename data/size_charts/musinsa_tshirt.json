@@ -1,0 +1,26 @@
+{
+  "name": "반소매 티셔츠 (오랑우탄 프린트)",
+  "category": "upper",
+  "source": "무신사 상품 페이지의 실측 사이즈 표에서 옮긴 값 (2026-09-09 확인)",
+  "unit": "cm (단면)",
+  "sizes": {
+    "S": {
+      "length": 67.0,
+      "shoulder": 52.0,
+      "chest": 55.0,
+      "sleeve": 23.0
+    },
+    "M": {
+      "length": 71.0,
+      "shoulder": 54.0,
+      "chest": 58.0,
+      "sleeve": 24.0
+    },
+    "L": {
+      "length": 74.0,
+      "shoulder": 56.0,
+      "chest": 61.0,
+      "sleeve": 25.0
+    }
+  }
+}

@@ -1,15 +1,13 @@
-"""실제 쇼핑몰 옷으로 CFG/스텝 설정을 검증한다.
+"""실제 쇼핑몰 옷으로 추론 설정을 검증한다.
 
-지금 기본값(DPM++ 4스텝 + CFG 끔)은 데모 카디건 **한 벌**로만 확인했다.
-CFG를 끄면 옷 반영 강도가 약해질 수 있는데, 무늬가 복잡하거나 색이 흐린 옷에서
-어떤지 모르는 상태다. 실제 상품 사진으로 그 단서를 닫는 것이 목적이다.
+가속 설정을 데모 이미지로만 고르면 안 된다는 것을 이 스크립트로 확인했다.
+CatVTON 데모 카디건 한 벌에서는 CFG를 꺼도 멀쩡해 보였지만, 실제 상품으로 돌려보니
+사진 프린트 티셔츠가 통째로 뭉개졌다. 그래서 CFG 끄기는 폐기하고,
+지금은 **스텝 수만** 촘촘히 비교한다 (docs/PLAN.md 속도 최적화 절 참고).
 
-각 옷마다 5가지 설정으로 합성해 한 장에 나란히 붙인다:
-    DPM++ 30 + CFG on   품질 기준점 (같은 샘플러라 스텝/CFG 효과만 분리된다)
-    DPM++ 8  + CFG on
-    DPM++ 8  + CFG off
-    DPM++ 4  + CFG on
-    DPM++ 4  + CFG off  현재 기본값
+각 옷마다 설정별로 합성해 옷 사진과 함께 한 장에 나란히 붙인다.
+SSIM은 **옷 마스크 안쪽만** 잰다 — 전체 이미지로 재면 인물과 배경이 화면의
+대부분이라 옷이 붕괴해도 값이 거의 안 움직여서 지표 구실을 못 한다.
 
 실행:
     python scripts/real_garment_check.py --garments data/samples
@@ -52,16 +50,19 @@ GPU_NAME = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'
 OUT_DIR = os.path.join(OUT_ROOT, 'real')
 CSV_PATH = os.path.join(OUT_DIR, 'results.csv')
 FIELDS = ['garment', 'cloth_type', 'config', 'scheduler', 'steps', 'guidance',
-          'mask_s', 'diffusion_s', 'total_s', 'ssim_vs_ref', 'out_path',
-          'platform', 'gpu']
+          'mask_s', 'diffusion_s', 'total_s', 'ssim_vs_ref', 'ssim_garment',
+          'out_path', 'platform', 'gpu']
 
 # (표시명, 스케줄러, 스텝, guidance). 첫 항목이 SSIM 기준점이다.
+#
+# CFG 끄기는 실제 상품 검증에서 탈락했다(사진 프린트 옷이 붕괴). 이제 남은 축은
+# 스텝 수뿐이라, 8스텝(안전)과 4스텝(프린트가 쪼그라듦) 사이를 촘촘히 본다.
 CONFIGS = [
-    ('기준 30스텝 CFG켬', 'dpm', 30, 2.5),
-    ('8스텝 CFG켬', 'dpm', 8, 2.5),
-    ('8스텝 CFG끔', 'dpm', 8, 1.0),
-    ('4스텝 CFG켬', 'dpm', 4, 2.5),
-    ('4스텝 CFG끔 (현재 기본값)', 'dpm', 4, 1.0),
+    ('기준 30스텝', 'dpm', 30, 2.5),
+    ('8스텝 (현재 기본값)', 'dpm', 8, 2.5),
+    ('6스텝', 'dpm', 6, 2.5),
+    ('5스텝', 'dpm', 5, 2.5),
+    ('4스텝', 'dpm', 4, 2.5),
 ]
 
 # 파일명으로 상/하의를 가른다. 옷 종류를 틀리면 엉뚱한 부위에 합성된다
@@ -96,18 +97,46 @@ def _pil_font(size):
     return ImageFont.load_default()
 
 
-def ssim_against(reference_path, path):
-    """기준 이미지와 얼마나 같은 그림인지. skimage가 없으면 None."""
+def ssim_against(reference_path, path, mask=None):
+    """기준 이미지와 얼마나 같은 그림인지.
+
+    mask를 주면 **그 안쪽만** 잰다. 전체 이미지로 재면 인물과 배경이 화면의
+    대부분이라 옷이 완전히 망가져도 값이 거의 안 움직인다 — 실제로 붕괴한
+    티셔츠가 0.950, 멀쩡한 맨투맨이 0.953으로 구별되지 않았다.
+    옷 재현을 재려면 옷 영역만 봐야 한다.
+
+    반환: (전체 SSIM, 옷 영역 SSIM). skimage가 없으면 (None, None).
+    """
     try:
         import numpy as np
         from skimage.metrics import structural_similarity
     except ImportError:
-        return None
+        return None, None
     a = np.array(Image.open(reference_path).convert('L'), dtype=np.float64)
     b = np.array(Image.open(path).convert('L'), dtype=np.float64)
     if a.shape != b.shape:
-        return None
-    return round(float(structural_similarity(a, b, data_range=255.0)), 4)
+        return None, None
+
+    score, smap = structural_similarity(a, b, data_range=255.0, full=True)
+    full_score = round(float(score), 4)
+    if mask is None:
+        return full_score, None
+
+    selected = np.array(mask.convert('L')) > 127
+    if not selected.any():
+        return full_score, None
+    return full_score, round(float(smap[selected].mean()), 4)
+
+
+def garment_mask(person_path, cloth_type):
+    """옷 영역 마스크. SSIM을 옷 안쪽으로 한정하는 데 쓴다.
+
+    같은 인물·같은 부위면 결과가 같으므로 부위별로 한 번만 만든다.
+    """
+    _pipeline, automasker, _proc, _device = load_models()
+    from utils import resize_and_crop
+    person = resize_and_crop(Image.open(person_path).convert('RGB'), (768, 1024))
+    return automasker(person, cloth_type)['mask']
 
 
 def append_row(row):
@@ -148,7 +177,7 @@ def build_grid(garment_path, person_path, results, out_path):
         if seconds is not None:
             note = f'{seconds:.1f}초'
             if ssim is not None:
-                note += f'   SSIM {ssim:.3f}'
+                note += f'   옷 SSIM {ssim:.3f}'
             draw.text((x, header + pad + cell_h + 6), note, fill='#444', font=font_note)
 
     name = os.path.splitext(os.path.basename(garment_path))[0]
@@ -183,10 +212,16 @@ def main():
     load_models()
     print('모델 로딩 완료\n', flush=True)
 
+    masks = {}  # 부위별 옷 마스크 (같은 인물이므로 한 번만 만든다)
+
     for garment in garments:
         name = os.path.splitext(os.path.basename(garment))[0]
         cloth_type = cloth_type_of(garment)
         print(f'--- {name} ({cloth_type}) ---', flush=True)
+
+        if cloth_type not in masks:
+            masks[cloth_type] = garment_mask(person, cloth_type)
+        mask = masks[cloth_type]
 
         results, reference_path = [], None
         for label, scheduler, steps, guidance in CONFIGS:
@@ -208,17 +243,19 @@ def main():
 
             if reference_path is None:
                 reference_path = out_path
-                ssim = 1.0
+                ssim_full, ssim_garment = 1.0, 1.0
             else:
-                ssim = ssim_against(reference_path, out_path)
+                ssim_full, ssim_garment = ssim_against(reference_path, out_path, mask)
+                print(f'    SSIM 전체 {ssim_full}  옷영역 {ssim_garment}', flush=True)
 
-            results.append((label, out_path, seconds, ssim))
+            results.append((label, out_path, seconds, ssim_garment))
             if seconds is not None:
                 append_row({
                     'garment': name, 'cloth_type': cloth_type, 'config': label,
                     'scheduler': scheduler, 'steps': steps, 'guidance': guidance,
                     'mask_s': timing['mask_s'], 'diffusion_s': timing['diffusion_s'],
-                    'total_s': seconds, 'ssim_vs_ref': ssim, 'out_path': out_path,
+                    'total_s': seconds, 'ssim_vs_ref': ssim_full,
+                    'ssim_garment': ssim_garment, 'out_path': out_path,
                     'platform': PLATFORM, 'gpu': GPU_NAME,
                 })
 

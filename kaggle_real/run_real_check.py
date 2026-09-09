@@ -50,6 +50,10 @@ def run(*args):
         sys.exit(f'실패 (exit {rc}): {args}')
 
 
+# 한글 폰트가 없으면 비교 그리드의 라벨이 두부(□)로 깨져 발표에 못 쓴다.
+subprocess.call('apt-get -qq install -y fonts-nanum > /dev/null 2>&1', shell=True)
+subprocess.call('rm -rf /root/.cache/matplotlib', shell=True)
+
 run(os.path.join(REPO_DIR, 'scripts', 'setup_env.py'))
 run(os.path.join(REPO_DIR, 'scripts', 'real_garment_check.py'), '--garments', GARMENTS)
 

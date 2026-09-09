@@ -121,9 +121,20 @@ DEFAULT_SCHEDULER = 'dpm'
 DEFAULT_STEPS = 8
 DEFAULT_GUIDANCE = 2.5  # 1.0 이하면 CFG가 꺼져 2배 빨라지지만 옷이 무너진다
 
+# 부위별 guidance. 실제 사진 실험에서 상의와 하의가 갈렸다.
+#   상의: 2.5가 최선. 5.0으로 올리면 옷 가장자리가 지저분해지고 프린트가 깨진다.
+#   하의: 2.5에서 **색이 아예 틀렸다** — 네이비 코듀로이가 크림색으로 나왔고
+#         인물 3명 모두 그랬다. 5.0으로 올리니 실제 데님 색이 나왔다.
+# 근거가 하의 한 벌(인물 3명)뿐이므로, 다른 바지에서 이상하면 다시 볼 것.
+DEFAULT_GUIDANCE_BY_TYPE = {'lower': 5.0}
+
+
+def default_guidance(cloth_type):
+    return DEFAULT_GUIDANCE_BY_TYPE.get(cloth_type, DEFAULT_GUIDANCE)
+
 
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
-           guidance_scale=DEFAULT_GUIDANCE, seed=42, scheduler=DEFAULT_SCHEDULER,
+           guidance_scale=None, seed=42, scheduler=DEFAULT_SCHEDULER,
            eta=1.0, return_timing=False, composite=True):
     """인물 사진에 옷을 합성한다.
 
@@ -132,7 +143,8 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     scheduler: 'ddim'(기본) 또는 'dpm'(DPMSolverMultistep, 적은 스텝에서 유리)
     eta: DDIM 확률성. 1.0이면 DDPM에 가깝고 0.0이면 결정적. DPM++에서는 무시된다.
         (repo 기본값이 1.0이라 그대로 둔다)
-    guidance_scale: 1.0 이하면 CFG가 꺼져 배치가 절반 -> 약 2배 빠름
+    guidance_scale: None이면 부위별 기본값(상의 2.5 / 하의 5.0).
+        1.0 이하면 CFG가 꺼져 배치가 절반 -> 약 2배 빠르지만 옷이 무너진다
     composite: 마스크 밖을 원본 사진으로 되돌린다. 아래 주석 참고
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
@@ -141,6 +153,8 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         raise ValueError(f'cloth_type must be one of {CLOTH_TYPES}, got {cloth_type!r}')
     if scheduler not in SCHEDULERS:
         raise ValueError(f'scheduler must be one of {SCHEDULERS}, got {scheduler!r}')
+    if guidance_scale is None:
+        guidance_scale = default_guidance(cloth_type)
 
     pipeline, automasker, mask_processor, device = load_models()
 

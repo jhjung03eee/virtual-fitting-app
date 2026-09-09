@@ -23,6 +23,11 @@ KO_FONTS = ('NanumGothic', 'NanumBarunGothic', 'Malgun Gothic', 'AppleGothic',
 # 한글 폰트가 없을 때 쓸 대체 표기. 라벨이 고정된 소수의 문구라 이 방식으로 충분하다.
 EN_FALLBACK = (
     ('옷 사진', 'garment'),
+    ('합성없음', 'no-composite'),
+    ('합성', 'composite'),
+    ('지금까지', 'before'),
+    ('현재 기본값', 'current default'),
+    ('원본 설정', 'repo default'),
     ('기준 ', 'reference '),
     ('현재 기본값', 'current default'),
     ('스텝', ' steps'),

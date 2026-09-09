@@ -42,12 +42,16 @@ def person_box(image):
 
     반환: (left, top, right, bottom) 픽셀 좌표. 못 찾으면 None.
     """
+    # 포즈 검출은 실패할 수 있는 경로가 여럿이다 — mediapipe 미설치, 모델 파일
+    # 다운로드 실패(첫 실행 때 네트워크를 탄다), 사람이 안 보이는 사진.
+    # 어느 쪽이든 크롭을 포기할 이유는 없으므로(가운데 크롭으로 넘어간다)
+    # 넓게 잡아 삼킨다.
     try:
         from body_measure import _run_pose
-    except ImportError:
+        landmarks, _mask = _run_pose(np.array(image.convert('RGB')))
+    except Exception as e:
+        print(f'    (포즈 검출 실패: {type(e).__name__} — 가운데 크롭으로 대체)')
         return None
-
-    landmarks, _mask = _run_pose(np.array(image.convert('RGB')))
     if not landmarks:
         return None
 

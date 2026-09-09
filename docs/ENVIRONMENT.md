@@ -101,6 +101,37 @@ P100은 **6.0**이라 조건에 못 미치고, 이때 torch.compile은 예외를
    못 바꾼다** (`"gpu": "T4 x2"` 를 넣어도 무시됨). 커널 페이지의 Settings →
    Accelerator 에서 직접 바꿔야 한다.
 
+### 11. Triton이 `libcuda.so`를 못 찾는다 (Kaggle T4)
+P100(sm_60)에서 못 돌던 `torch.compile`을 T4(sm_75)에서 다시 시도하니 이번엔
+capability는 통과했는데 다른 데서 막혔다.
+
+```
+BackendCompilerFailed: backend='inductor' raised:
+AssertionError: libcuda.so cannot found!
+```
+
+컨테이너에 드라이버 라이브러리가 `libcuda.so.1` 로만 있고 링커가 찾는 `libcuda.so`
+이름이 없어서 Triton이 포기한다. 여기서도 torch.compile은 **예외를 삼키고 eager로
+되돌아가므로** 그냥 두면 "느려지지도 빨라지지도 않는" 결과만 남는다.
+
+→ 심볼릭 링크를 만들거나 경로를 알려준다:
+```bash
+ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so
+# 또는
+export TRITON_LIBCUDA_PATH=/usr/lib/x86_64-linux-gnu
+```
+
+### 12. Kaggle 커널의 GPU 종류는 API로 못 바꾼다
+`kernel-metadata.json` 에 `"gpu": "T4 x2"` 를 넣어도 **무시된다**(push는 성공한다).
+커널 페이지 → **Session options → Accelerator** 에서 바꾼 뒤 `Save & Run All` 로
+실행해야 한다. 한 번 바꾸면 그 커널은 설정을 기억한다.
+
+### 13. T4는 연속 실행하면 느려진다 (측정 설계 주의)
+같은 설정을 연달아 재는데 시간이 17.0 → 17.6 → 18.4초로 계속 올라갔다.
+T4는 지속 부하에서 클럭이 떨어진다. **먼저 잰 설정이 유리해지므로**, 설정 A와 B를
+순서대로 한 번씩 재고 비교하면 순서 효과를 최적화 효과로 착각한다.
+→ 마지막에 기준 설정을 한 번 더 재서 드리프트를 확인할 것.
+
 ## 검증된 실행 방법
 
 ### A. Colab + Python 3.9 venv (권장, AutoMasker 포함 전부 동작)

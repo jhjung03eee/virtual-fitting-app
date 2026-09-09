@@ -38,6 +38,12 @@ def run(*args):
 
 
 subprocess.call('apt-get -qq install -y fonts-nanum > /dev/null 2>&1', shell=True)
+
+# Triton은 libcuda.so 라는 이름을 찾는데 컨테이너에는 libcuda.so.1 만 있다.
+# 링크가 없으면 torch.compile이 조용히 eager로 되돌아간다 (docs/ENVIRONMENT.md #11).
+subprocess.call(
+    'ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so',
+    shell=True)
 run(os.path.join(REPO_DIR, 'scripts', 'setup_env.py'))
 run(os.path.join(REPO_DIR, 'scripts', 'speed_opt_check.py'), '--garments', garments)
 

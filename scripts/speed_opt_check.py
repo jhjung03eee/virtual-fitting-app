@@ -65,6 +65,10 @@ VARIANTS = [
     ('channels_last', False, True),
     ('torch.compile', True, False),
     ('compile + channels_last', True, True),
+    # T4는 지속 부하에서 클럭이 떨어져 뒤에 잰 설정이 불리해진다. 처음과 같은
+    # 설정을 마지막에 한 번 더 재서, 위 차이가 최적화 때문인지 드리프트 때문인지
+    # 구별한다 (docs/ENVIRONMENT.md #13).
+    ('기준 재측정 (드리프트 확인)', False, False),
 ]
 
 
@@ -210,8 +214,16 @@ def main():
         if base_mean is None:
             base_mean = mean
         ssims = [float(r['ssim_garment_vs_base']) for r in rows if r['variant'] == variant]
-        print(f'{variant:24} 확산 {mean:6.1f}초  '
+        print(f'{variant:26} 확산 {mean:6.1f}초  '
               f'{base_mean / mean:5.2f}배  기준과 옷 SSIM {min(ssims):.4f}', flush=True)
+
+    first = [float(r['diffusion_s']) for r in rows if r['variant'] == VARIANTS[0][0]]
+    last = [float(r['diffusion_s']) for r in rows if r['variant'] == VARIANTS[-1][0]]
+    if first and last:
+        drift = (sum(last) / len(last)) - (sum(first) / len(first))
+        print(f'
+같은 설정의 처음/마지막 차이(드리프트): {drift:+.1f}초', flush=True)
+        print('이 값보다 작은 차이는 최적화 효과로 볼 수 없다.', flush=True)
 
 
 if __name__ == '__main__':

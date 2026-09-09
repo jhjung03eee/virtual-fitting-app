@@ -88,6 +88,18 @@ CONFIG_SETS = {
     # 프린트가 나오는지가 시드에 따라 갈리는지. 지금까지 seed=42로 고정해와서
     # '이 인물에서는 안 된다'가 사실은 '이 시드에서는 안 된다'일 수 있다.
     # 설정은 모두 같고 시드만 바꾼다.
+    # GitHub 예시처럼 안 나오는 이유를 가른다. 저장소 데모 앱의 기본값은
+    # DDIM 50스텝이고 마스크 밖을 되돌리지 않는다. 우리는 DPM 8스텝 + 합성이다.
+    # 스텝 차이 때문인지, 합성 때문인지, 아니면 입력 사진 자체가 학습 분포
+    # (VITON-HD/DressCode 스튜디오 촬영) 밖이라 그런지 본다.
+    'repo': [
+        ('저장소 그대로 DDIM 50 합성없음', 'ddim', 50, 2.5, False, None),
+        ('DDIM 50 + 합성', 'ddim', 50, 2.5, True, None),
+        ('DPM 50 + 합성', 'dpm', 50, 2.5, True, None),
+        ('DPM 30 + 합성', 'dpm', 30, 2.5, True, None),
+        ('DPM 8 + 합성 (현재)', 'dpm', 8, 2.5, True, None),
+        ('DPM 50 g5.0 + 합성', 'dpm', 50, 5.0, True, None),
+    ],
     'seeds': [(f'seed {v}', 'dpm', 8, 2.5, True, v) for v in (42, 1, 7, 123, 2024, 31337)],
 }
 CONFIGS = CONFIG_SETS['steps']

@@ -107,6 +107,27 @@ class TestRecommend(unittest.TestCase):
         rec = recommend(UPPER, {'chest': 47.0})  # shoulder/length 없음
         self.assertTrue(any('제외한 항목' in n for n in rec.notes))
 
+    def test_notes_use_korean_dimension_names(self):
+        """안내 문구에 'length'라고 적히면 무슨 항목인지 알 수 없다."""
+        rec = recommend(UPPER, {'chest': 47.0})
+        note = next(n for n in rec.notes if '제외한 항목' in n)
+        self.assertIn('총장', note)
+        self.assertNotIn('length', note)
+
+    def test_unused_body_input_is_noted(self):
+        """치수표에 없는 항목을 입력하면 조용히 버리지 말고 알려야 한다.
+
+        래글런 소매 상의는 어깨 솔기가 없어 치수표에 어깨너비가 아예 없다.
+        사용자가 입력한 값이 왜 반영되지 않았는지 알 수 있어야 한다.
+        """
+        chart = SizeChart(name='래글런', category='upper', sizes={
+            'S': {'chest': 56.0}, 'M': {'chest': 58.0},
+        })
+        rec = recommend(chart, {'chest': 48.0, 'shoulder': 45.0})
+        self.assertIsNotNone(rec.best)
+        note = next(n for n in rec.notes if '사용하지 않았습니다' in n)
+        self.assertIn('어깨너비', note)
+
     def test_lower_category(self):
         rec = recommend(LOWER, {'waist': 35.0, 'hip': 48.0})
         self.assertTrue(rec.best.wearable)

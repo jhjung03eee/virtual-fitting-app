@@ -64,6 +64,20 @@ IDEAL_EASE = {
     'lower': {'waist': 3.0, 'hip': 5.0, 'length': 0.0},
 }
 
+# 사용자에게 보여줄 때 쓰는 항목 이름. 안내 문구에 'length'라고 적히면
+# 무슨 항목인지 알 수 없다.
+DIMENSION_KO = {
+    'chest': '가슴단면', 'shoulder': '어깨너비', 'waist': '허리단면',
+    'hip': '엉덩이단면', 'length': '총장', 'sleeve': '소매길이',
+    'cuff': '소매부리단면', 'armhole': '암홀', 'hem': '밑단단면',
+    'thigh': '허벅지단면', 'rise': '밑위',
+}
+
+
+def ko(dimension: str) -> str:
+    return DIMENSION_KO.get(dimension, dimension)
+
+
 # 이 항목들은 "작으면 못 입는다"에 해당해 음수 여유분에 큰 벌점을 준다.
 HARD_LIMIT_DIMENSIONS = ('chest', 'waist', 'hip')
 UNDERSIZE_PENALTY = 3.0
@@ -186,7 +200,19 @@ def recommend(chart: SizeChart, body_cm: Dict[str, float]) -> Recommendation:
 
     missing = [d for d in chart.dimensions() if d not in body_cm]
     if missing:
-        notes.append(f"몸 치수가 없어 판정에서 제외한 항목: {', '.join(missing)}")
+        notes.append(
+            f"몸 치수를 몰라 판정에서 제외한 항목: {', '.join(ko(d) for d in missing)}"
+        )
+
+    # 반대 방향도 알려야 한다. 래글런 소매 상의처럼 치수표에 어깨너비가 아예
+    # 없는 경우가 있는데, 사용자가 입력한 값이 조용히 버려지면
+    # 왜 반영이 안 됐는지 알 수 없다.
+    unused = [d for d in sorted(body_cm) if d not in chart.dimensions()]
+    if unused:
+        notes.append(
+            f"이 치수표에 없는 항목이라 사용하지 않았습니다: "
+            f"{', '.join(ko(d) for d in unused)}"
+        )
 
     fits = [evaluate_size(chart, size, body_cm) for size in chart.sizes]
     # 입을 수 있는 것을 우선하고, 그 안에서 점수가 낮은 순

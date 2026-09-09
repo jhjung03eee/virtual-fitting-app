@@ -285,7 +285,26 @@ class TestRealMusinsaCharts(unittest.TestCase):
         },
     }
 
-    # shirts_size.jpg — 사용자가 '기준표 사이즈' 탭을 잘못 캡처한 경우.
+    # shirts_size.jpg — 래글런 소매라 치수표에 '어깨너비'가 아예 없다.
+    # 측정 항목이 가슴단면·총장 둘뿐인 표도 추천이 되어야 한다.
+    SHIRT = {
+        'name': '긴소매 래글런 티셔츠',
+        'category': 'upper',
+        'unit': 'cm',
+        'sizes': {
+            '내 사이즈': {'총장': '사이즈를 직접 입력해주세요'},
+            'S': {'총장': 69, '가슴단면': 56, '소매부리단면': '-', '전체소매길이': '-',
+                  '밑단단면': '-', '암홀': '-'},
+            'M': {'총장': 72, '가슴단면': 58, '소매부리단면': '-', '전체소매길이': '-',
+                  '밑단단면': '-', '암홀': '-'},
+            'L': {'총장': 73, '가슴단면': 60, '소매부리단면': '-', '전체소매길이': '-',
+                  '밑단단면': '-', '암홀': '-'},
+            'XL': {'총장': 75, '가슴단면': 62, '소매부리단면': '-', '전체소매길이': '-',
+                   '밑단단면': '-', '암홀': '-'},
+        },
+    }
+
+    # shirts_size.jpg 를 처음 캡처했을 때 — '기준표 사이즈' 탭을 잘못 잡은 경우.
     # 실측 치수가 없어 추천에 쓸 수 없다.
     COUNTRY_TABLE = {
         'sizes': {
@@ -327,6 +346,26 @@ class TestRealMusinsaCharts(unittest.TestCase):
         rec = recommend(chart, {'waist': 40.0, 'hip': 49.0})
         self.assertIsNotNone(rec.best)
         self.assertTrue(rec.best.wearable)
+
+    def test_shirt_raglan_without_shoulder(self):
+        chart, problems = build_chart(self.SHIRT)
+        self.assertEqual(sorted(chart.sizes, key=lambda x: ['S', 'M', 'L', 'XL'].index(x)),
+                         ['S', 'M', 'L', 'XL'])
+        self.assertEqual(chart.sizes['M'], {'length': 72.0, 'chest': 58.0})
+        self.assertNotIn('shoulder', chart.sizes['M'])
+        self.assertEqual(problems, [])
+
+    def test_shirt_recommends_and_reports_unused_shoulder(self):
+        """어깨너비를 입력해도 표에 없으면 쓰지 않았다고 알려야 한다."""
+        chart, _ = build_chart(self.SHIRT)
+        rec = recommend(chart, {'chest': 48.0, 'shoulder': 45.0})
+        self.assertIsNotNone(rec.best)
+        self.assertTrue(any('어깨너비' in n and '사용하지 않았습니다' in n
+                            for n in rec.notes))
+
+    def test_full_sleeve_label(self):
+        """'전체소매길이'가 '소매부리단면'과 섞이면 안 된다."""
+        self.assertEqual(normalize_label('전체소매길이'), 'sleeve')
 
     def test_country_table_rejected_with_guidance(self):
         """환산표를 올리면 '실측 사이즈 탭을 캡처하라'고 안내해야 한다."""

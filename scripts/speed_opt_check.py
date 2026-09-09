@@ -68,6 +68,31 @@ VARIANTS = [
 ]
 
 
+def compile_probe():
+    """torch.compile이 이 GPU에서 실제로 동작하는지 확인한다.
+
+    Inductor 백엔드는 Triton으로 커널을 만드는데, Triton은 **compute capability
+    7.0 이상**을 요구한다. P100은 6.0이라 조건에 못 미치는데, 이때 torch.compile은
+    에러를 내는 대신 조용히 eager로 되돌아간다. 그러면 "컴파일했는데 안 빨라졌다"와
+    "애초에 컴파일이 안 됐다"가 로그상 구별되지 않는다. 이 둘은 결론이 정반대다.
+    """
+    if not torch.cuda.is_available():
+        return 'CUDA 없음'
+    major, minor = torch.cuda.get_device_capability()
+    line = f'compute capability {major}.{minor}'
+    if (major, minor) < (7, 0):
+        return f'{line} — Triton은 7.0 이상 필요. torch.compile이 eager로 되돌아간다'
+
+    try:
+        import torch._dynamo as dynamo
+        dynamo.reset()
+        compiled = torch.compile(lambda x: (x * 2).relu(), backend='inductor')
+        compiled(torch.randn(8, 8, device='cuda', dtype=torch.float16))
+        return f'{line} — inductor 동작 확인'
+    except Exception as e:
+        return f'{line} — inductor 실패: {type(e).__name__}: {e}'
+
+
 def free_models():
     """다음 설정을 로드하기 전에 GPU 메모리를 비운다."""
     tryon_core._models = None
@@ -105,7 +130,8 @@ def main():
 
     os.makedirs(OUT_DIR, exist_ok=True)
     print(f'설정 {len(VARIANTS)}가지 × 옷 {len(garments)}벌, {args.steps}스텝', flush=True)
-    print(f'환경: {PLATFORM} / {GPU_NAME}\n', flush=True)
+    print(f'환경: {PLATFORM} / {GPU_NAME}', flush=True)
+    print(f'torch {torch.__version__} / {compile_probe()}\n', flush=True)
 
     masks, baseline_paths = {}, {}
 

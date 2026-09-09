@@ -139,3 +139,19 @@ kaggle kernels status <owner>/<slug>
 - 로그만 빠르게 받으려면 `api.kernels_logs(...)` (파일 다운로드 없이 로그만).
 - `/kaggle/working`에 clone하면 repo 전체가 kernel output으로 잡혀 다운로드가 지옥이 된다.
   **clone은 `/kaggle/tmp`에, 결과만 `/kaggle/working`에 저장할 것.**
+- `kernel-metadata.json`의 `title`이 만드는 슬러그와 `id`가 다르면 커널은 **title 쪽 슬러그로**
+  만들어진다. 그러면 `status`/`output`이 `id`로 찾다가 "Permission denied"를 뱉는데,
+  권한 문제가 아니라 슬러그 불일치다. push 출력에 찍히는 URL의 슬러그가 진짜다.
+  (`VFA real garment check` → `vfa-real-garment-check`, `id`의 `...garments-check`와 어긋났다)
+- 데이터셋을 만들자마자 그걸 `dataset_sources`로 참조하는 커널을 밀면 **아직 처리 중이라
+  안 붙는다.** 커널은 그대로 실행되고 `/kaggle/input`만 비어 있어서, 데이터가 없다는
+  런타임 에러로만 드러난다. `kaggle datasets files <slug>`로 파일이 보이는지 확인하고 밀 것.
+
+### 저작권 있는 입력 이미지를 커널에 넣기
+쇼핑몰 상품 사진은 공개 저장소에 커밋하면 안 되므로 git clone으로는 커널에 못 보낸다.
+**비공개 Kaggle 데이터셋**으로 올려 `/kaggle/input`으로 받는다 (`kaggle_real/` 참고):
+```bash
+cd data/samples && kaggle datasets create -p .   # dataset-metadata.json 필요, 기본 비공개
+```
+`-p`에 긴 절대경로를 주면 kaggle 2.1.2가 업로드 임시 경로를 잘못 만들어 실패한다.
+**폴더 안에서 `-p .`로 실행할 것.**

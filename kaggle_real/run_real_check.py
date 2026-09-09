@@ -5,8 +5,8 @@
 
 로컬에서:
     kaggle kernels push -p kaggle_real/
-    kaggle kernels status jefferyjung/vfa-real-garments-check
-    kaggle kernels output jefferyjung/vfa-real-garments-check -p <dir>
+    kaggle kernels status jefferyjung/vfa-real-garment-check
+    kaggle kernels output jefferyjung/vfa-real-garment-check -p <dir>
 
 clone과 venv는 /kaggle/tmp에 두고 결과만 /kaggle/working에 남긴다.
 """
@@ -24,8 +24,19 @@ if not os.path.exists(REPO_DIR):
 print('repo:', REPO_DIR, flush=True)
 
 if not os.path.isdir(GARMENTS):
-    sys.exit(f'옷 사진 데이터셋이 없습니다: {GARMENTS}\n'
-             '커널 설정에서 vfa-real-garments 데이터셋을 추가했는지 확인하세요.')
+    # 데이터셋이 다른 이름으로 붙었을 수 있다. /kaggle/input 아래에서
+    # 이미지가 들어 있는 폴더를 찾아 쓴다.
+    listing = sorted(os.listdir('/kaggle/input')) if os.path.isdir('/kaggle/input') else []
+    found = [os.path.join('/kaggle/input', name) for name in listing
+             if os.path.isdir(os.path.join('/kaggle/input', name))
+             and any(f.lower().endswith(('.jpg', '.jpeg', '.png'))
+                     for f in os.listdir(os.path.join('/kaggle/input', name)))]
+    if not found:
+        sys.exit(f'옷 사진 데이터셋이 없습니다: {GARMENTS}\n'
+                 f'/kaggle/input 내용: {listing or "(비어 있음)"}\n'
+                 '커널 설정에서 vfa-real-garments 데이터셋을 추가했는지 확인하세요.')
+    GARMENTS = found[0]
+    print('데이터셋을 다른 경로에서 찾았습니다:', GARMENTS, flush=True)
 print('옷 사진:', sorted(os.listdir(GARMENTS)), flush=True)
 
 

@@ -21,6 +21,7 @@ CLOTH_TYPES = ['upper', 'lower', 'overall', 'inner', 'outer']
 SCHEDULERS = ['ddim', 'dpm']
 
 _models = None
+_models_key = None
 
 
 def _ensure_repo_on_path():
@@ -29,10 +30,23 @@ def _ensure_repo_on_path():
     os.chdir(REPO_DIR)
 
 
-def load_models(device='cuda', mixed_precision='fp16'):
-    """파이프라인과 AutoMasker를 1회만 로드하고 캐시한다. T4 기준 약 40초."""
-    global _models
-    if _models is not None:
+def load_models(device='cuda', mixed_precision='fp16',
+                compile_model=False, channels_last=False):
+    """파이프라인과 AutoMasker를 1회만 로드하고 캐시한다. T4 기준 약 40초.
+
+    compile_model / channels_last 는 **스텝당 비용**을 줄이는 옵션이다.
+    샘플링 수학을 건드리지 않으므로 결과가 달라지지 않아야 한다 —
+    스텝을 줄이는 것과 달리 품질 손실이 원리상 없다.
+
+      compile_model: torch.compile 로 UNet/VAE 커널을 융합한다. 첫 호출에서
+        컴파일하느라 수 분이 걸리므로, 서버처럼 한 번 띄워두고 쓰는 경우에만 이득이다.
+      channels_last: NHWC 메모리 배치. conv 위주 모델에서 텐서코어 활용이 좋아진다.
+
+    설정이 바뀌면 다시 로드한다 (같은 프로세스에서 여러 설정을 비교할 수 있어야 한다).
+    """
+    global _models, _models_key
+    key = (device, mixed_precision, compile_model, channels_last)
+    if _models is not None and _models_key == key:
         return _models
 
     _ensure_repo_on_path()
@@ -54,7 +68,11 @@ def load_models(device='cuda', mixed_precision='fp16'):
         device=device,
         # 신버전 transformers와 safety checker API가 안 맞음 (docs/ENVIRONMENT.md #5)
         skip_safety_check=True,
+        compile=compile_model,
     )
+    if channels_last:
+        pipeline.unet = pipeline.unet.to(memory_format=torch.channels_last)
+        pipeline.vae = pipeline.vae.to(memory_format=torch.channels_last)
     automasker = AutoMasker(
         densepose_ckpt=os.path.join(repo_path, 'DensePose'),
         schp_ckpt=os.path.join(repo_path, 'SCHP'),
@@ -65,6 +83,7 @@ def load_models(device='cuda', mixed_precision='fp16'):
     )
 
     _models = (pipeline, automasker, mask_processor, device)
+    _models_key = key
     return _models
 
 

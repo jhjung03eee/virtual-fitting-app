@@ -202,13 +202,15 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     mask = mask_processor.blur(mask, blur_factor=9)
 
     model_input = person
+    person_area = None
     if normalize_background:
         # 학습 데이터(VITON-HD/DressCode)는 전부 흰 배경 스튜디오 촬영이다.
         # 복도·패턴 바닥이 들어간 사진은 분포 밖이라 성공률이 떨어진다.
         # 인물만 오려 흰 배경에 올려서 입력을 학습 분포 쪽으로 민다.
         # 원래 배경은 마지막 합성에서 되돌아온다(composite가 원본 person을 쓴다).
+        person_area = person_area_mask(parsed)
         model_input = Image.composite(
-            person, Image.new('RGB', person.size, 'white'), person_area_mask(parsed))
+            person, Image.new('RGB', person.size, 'white'), person_area)
     _sync()
     t1 = time.perf_counter()
 
@@ -247,7 +249,16 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         # 지킬 수 있다. 마스크가 blur되어 있어 경계는 자연스럽게 섞인다.
         if result.size != person.size:
             result = result.resize(person.size, Image.LANCZOS)
-        result = Image.composite(result, person, mask.convert('L'))
+
+        blend = mask.convert('L')
+        if person_area is not None:
+            # 옷 마스크는 blur 때문에 인물 실루엣보다 바깥으로 번져 있다.
+            # 흰 배경으로 생성했으므로 그 띠에는 흰색이 들어있고, 그대로
+            # 합성하면 인물 주위에 흰 후광이 남는다. 인물 영역과 교집합을
+            # 취해 실루엣 안쪽만 바꾼다.
+            from PIL import ImageChops
+            blend = ImageChops.multiply(blend, person_area)
+        result = Image.composite(result, person, blend)
 
     mask_vis = vis_mask(person, mask)
     if return_timing:

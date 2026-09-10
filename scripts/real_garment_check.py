@@ -46,7 +46,8 @@ from PIL import Image  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from compare_grid import build_grid  # noqa: E402
 
-from tryon_core import try_on, load_models, REPO_DIR  # noqa: E402
+from tryon_core import (try_on, load_models, REPO_DIR,  # noqa: E402
+                        default_guidance)
 
 GPU_NAME = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'
 
@@ -103,12 +104,12 @@ CONFIG_SETS = {
     # 배경 정규화 효과. 시드 변동이 워낙 커서 같은 시드끼리 짝지어 비교해야
     # 배경 효과와 시드 운이 섞이지 않는다.
     'background': [
-        ('배경 그대로 s42', 'dpm', 8, 2.5, True, 42, False),
-        ('흰 배경 s42', 'dpm', 8, 2.5, True, 42, True),
-        ('배경 그대로 s123', 'dpm', 8, 2.5, True, 123, False),
-        ('흰 배경 s123', 'dpm', 8, 2.5, True, 123, True),
-        ('배경 그대로 s7', 'dpm', 8, 2.5, True, 7, False),
-        ('흰 배경 s7', 'dpm', 8, 2.5, True, 7, True),
+        ('배경 그대로 s42', 'dpm', 8, None, True, 42, False),
+        ('흰 배경 s42', 'dpm', 8, None, True, 42, True),
+        ('배경 그대로 s123', 'dpm', 8, None, True, 123, False),
+        ('흰 배경 s123', 'dpm', 8, None, True, 123, True),
+        ('배경 그대로 s7', 'dpm', 8, None, True, 7, False),
+        ('흰 배경 s7', 'dpm', 8, None, True, 7, True),
     ],
     'seeds': [(f'seed {v}', 'dpm', 8, 2.5, True, v, False)
               for v in (42, 1, 7, 123, 2024, 31337)],
@@ -229,6 +230,8 @@ def main():
         results, reference_path = [], None
         for label, scheduler, steps, guidance, composite, seed, white_bg in CONFIGS:
             seed = args.seed if seed is None else seed
+            if guidance is None:
+                guidance = default_guidance(cloth_type)
             slug = f'{name}_{scheduler}{steps}_g{guidance:g}_s{seed}'
             if white_bg:
                 slug += '_whitebg'

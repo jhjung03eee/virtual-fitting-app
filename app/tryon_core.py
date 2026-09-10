@@ -99,6 +99,31 @@ def _to_image(x):
     return ImageOps.exif_transpose(image)
 
 
+def person_area_mask(parsed):
+    """SCHP 파싱 결과에서 인물 영역만 뽑는다. 흰색(255)이 사람.
+
+    ATR/LIP 두 파싱 모두 **0번 라벨이 배경**이므로 0이 아닌 곳이 사람이다.
+    둘을 OR로 합치면 한쪽이 놓친 부분(머리카락 끝, 신발 등)을 서로 메운다.
+    AutoMasker가 이미 돌린 파싱을 재사용하므로 추가 비용이 없다.
+    """
+    import numpy as np
+    from PIL import ImageFilter
+
+    def flatten(image):
+        array = np.squeeze(np.array(image))
+        return array[..., 0] if array.ndim == 3 else array
+
+    atr = flatten(parsed['schp_atr'])
+    lip = flatten(parsed['schp_lip'])
+    area = (atr != 0)
+    if lip.shape == atr.shape:
+        area |= (lip != 0)
+
+    mask = Image.fromarray((area * 255).astype('uint8'), mode='L')
+    # 실루엣 경계가 계단처럼 되지 않게 아주 약하게만 흐린다
+    return mask.filter(ImageFilter.GaussianBlur(2))
+
+
 def _sync():
     if torch.cuda.is_available():
         torch.cuda.synchronize()
@@ -135,7 +160,8 @@ def default_guidance(cloth_type):
 
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
            guidance_scale=None, seed=42, scheduler=DEFAULT_SCHEDULER,
-           eta=1.0, return_timing=False, composite=True):
+           eta=1.0, return_timing=False, composite=True,
+           normalize_background=False):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
@@ -146,6 +172,8 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     guidance_scale: None이면 부위별 기본값(상의 2.5 / 하의 5.0).
         1.0 이하면 CFG가 꺼져 배치가 절반 -> 약 2배 빠르지만 옷이 무너진다
     composite: 마스크 밖을 원본 사진으로 되돌린다. 아래 주석 참고
+    normalize_background: 인물만 오려 흰 배경에 올린 뒤 합성한다(배경 정규화).
+        학습 데이터가 전부 흰 배경이라, 복잡한 배경 사진의 성공률을 올리려는 시도다
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
@@ -166,8 +194,21 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
 
     _sync()
     t0 = time.perf_counter()
-    mask = automasker(person, cloth_type)['mask']
+    # AutoMasker.__call__ 대신 파싱을 직접 받는다. 배경 정규화에도 같은 파싱이
+    # 필요한데, __call__을 쓰면 densepose+SCHP를 두 번 돌리게 된다.
+    parsed = automasker.preprocess_image(person)
+    mask = automasker.cloth_agnostic_mask(
+        parsed['densepose'], parsed['schp_lip'], parsed['schp_atr'], part=cloth_type)
     mask = mask_processor.blur(mask, blur_factor=9)
+
+    model_input = person
+    if normalize_background:
+        # 학습 데이터(VITON-HD/DressCode)는 전부 흰 배경 스튜디오 촬영이다.
+        # 복도·패턴 바닥이 들어간 사진은 분포 밖이라 성공률이 떨어진다.
+        # 인물만 오려 흰 배경에 올려서 입력을 학습 분포 쪽으로 민다.
+        # 원래 배경은 마지막 합성에서 되돌아온다(composite가 원본 person을 쓴다).
+        model_input = Image.composite(
+            person, Image.new('RGB', person.size, 'white'), person_area_mask(parsed))
     _sync()
     t1 = time.perf_counter()
 
@@ -181,7 +222,7 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     try:
         generator = torch.Generator(device=device).manual_seed(seed) if seed != -1 else None
         result = pipeline(
-            image=person,
+            image=model_input,
             condition_image=garment,
             mask=mask,
             num_inference_steps=steps,

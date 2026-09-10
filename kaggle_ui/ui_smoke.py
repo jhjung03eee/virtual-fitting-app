@@ -5,9 +5,10 @@
 
 확인 항목
 1. gradio_app 모듈이 import 되는가 (문법·의존성)
-2. Blocks가 구성되는가 (컴포넌트 정의 오류 없음)
-3. 서버가 실제로 뜨고 200을 돌려주는가
-4. 사이즈 추천 로직이 UI 함수 경로로 동작하는가
+2. 옷 종류에 맞는 치수표만 걸러지는가
+3. 사이즈 추천 로직이 UI 함수 경로로 동작하는가
+4. **run() 을 실제로 호출해 try_on 에 넘기는 인자가 맞는가**
+5. 서버가 실제로 뜨고 200을 돌려주는가
 """
 import os
 import subprocess
@@ -85,7 +86,48 @@ for label, chart, kw in cases:
     out = gradio_app.size_advice(chart, **kw)
     print(f'\n--- {label} ---\n{out[:420]}', flush=True)
 
-print('\n=== 4. 서버 기동 및 응답 확인 ===', flush=True)
+print('\n=== 4. run() 전체 경로 ===', flush=True)
+# 배선 테스트(tests/test_gradio_wiring.py)는 AST로 개수만 본다. 여기서는 실제로
+# 호출해서 try_on 에 넘기는 키워드 인자까지 확인한다.
+# "앱은 멀쩡히 뜨는데 버튼을 누르면 터지는" 부류의 버그를 잡는 자리다.
+captured = {}
+
+
+def _recording_try_on(**kwargs):
+    from PIL import Image
+    captured.update(kwargs)
+    return Image.new('RGB', (76, 102), 'gray'), Image.new('RGB', (76, 102), 'black')
+
+
+fake.try_on = _recording_try_on
+
+from PIL import Image  # noqa: E402
+
+dummy = Image.new('RGB', (76, 102), 'white')
+result, advice, mask_vis = gradio_app.run(
+    dummy, dummy, '상의', 'dpm', 8, 2.5, 42,
+    True,                       # 배경 정규화 체크박스
+    upper_chart, 175, 45, 96, 80, 94,
+)
+print('  반환:', type(result).__name__, type(mask_vis).__name__, flush=True)
+print('  try_on 이 받은 인자:', sorted(captured), flush=True)
+print('  사이즈 추천 첫 줄:', advice.splitlines()[0][:80], flush=True)
+
+for required in ('person', 'garment', 'cloth_type', 'steps',
+                 'guidance_scale', 'seed', 'scheduler', 'normalize_background'):
+    assert required in captured, f'try_on 에 {required} 가 전달되지 않았습니다'
+assert captured['cloth_type'] == 'upper', captured['cloth_type']
+assert captured['normalize_background'] is True, '배경 정규화 체크박스가 전달되지 않았습니다'
+assert advice.strip(), '사이즈 추천이 비어 있습니다'
+
+# 하의를 고르면 cloth_type 이 lower 로 바뀌는지
+gradio_app.run(dummy, dummy, '하의', 'dpm', 8, 2.5, 42, False,
+               lower_chart, 175, None, None, 80, 94)
+assert captured['cloth_type'] == 'lower', captured['cloth_type']
+assert captured['normalize_background'] is False
+print('  옷 종류 전달 확인: 상의 -> upper, 하의 -> lower', flush=True)
+
+print('\n=== 5. 서버 기동 및 응답 확인 ===', flush=True)
 _app, local_url, _share = gradio_app.demo.launch(
     share=False, prevent_thread_lock=True, show_api=False, quiet=True)
 print('local_url:', local_url, flush=True)

@@ -99,6 +99,68 @@ def _to_image(x):
     return ImageOps.exif_transpose(image)
 
 
+def _garment_pixels(garment):
+    """옷 사진에서 옷에 해당하는 픽셀만 (N,3) 배열로. 흰 배경은 뺀다."""
+    import numpy as np
+    array = np.asarray(garment.convert('RGB'), dtype=np.float64)
+    foreground = array.sum(axis=2) < 720  # 거의 흰색인 배경 제외
+    if foreground.mean() < 0.05:          # 옷이 온통 흰색이면 전부 쓴다
+        foreground = np.ones(array.shape[:2], dtype=bool)
+    return array[foreground]
+
+
+def match_garment_color(result, person, mask, garment, strength=1.0):
+    """생성된 옷 영역의 **색조**를 원본 옷 사진에 맞춘다.
+
+    확산 설정을 아무리 만져도 하의 색이 원본과 달랐다 — 다크 네이비 코듀로이가
+    밝은 워싱 데님으로 나온다. 그런데 **정답 색은 우리가 알고 있다.** 옷 사진이
+    입력으로 들어와 있기 때문이다. 그러면 생성 결과를 그 색에 맞추면 된다.
+
+    LAB 색공간에서 중앙값과 산포를 맞춘다. 평균/표준편차 대신 **중앙값과 MAD**를
+    쓰는 이유는, 마스크 안에 피부(반팔의 팔)나 그림자가 섞여도 통계가 덜 끌려가기
+    때문이다. 밝기(L)의 산포는 건드리지 않는다 — 주름과 음영이 거기 들어있어서
+    스케일을 바꾸면 옷이 평평해진다. **색조(a·b)만 옮기고 명암은 유지한다.**
+
+    strength: 0이면 그대로, 1이면 완전히 맞춘다.
+    """
+    import numpy as np
+    try:
+        from skimage.color import rgb2lab, lab2rgb
+    except ImportError:
+        return result  # skimage 없으면 조용히 건너뛴다
+
+    selected = np.asarray(mask.convert('L')) > 127
+    if not selected.any():
+        return result
+
+    generated = np.asarray(result.convert('RGB'), dtype=np.float64) / 255.0
+    lab = rgb2lab(generated)
+
+    target_lab = rgb2lab(_garment_pixels(garment).reshape(-1, 1, 3) / 255.0).reshape(-1, 3)
+
+    def robust(values):
+        median = np.median(values, axis=0)
+        spread = np.median(np.abs(values - median), axis=0) + 1e-6
+        return median, spread
+
+    source_median, source_spread = robust(lab[selected])
+    target_median, target_spread = robust(target_lab)
+
+    adjusted = lab[selected].copy()
+    # L: 중앙값만 옮기고 산포는 유지 (주름·음영 보존)
+    adjusted[:, 0] += (target_median[0] - source_median[0]) * strength
+    # a, b: 중앙값과 산포를 모두 맞춘다 (색조가 목표)
+    for channel in (1, 2):
+        scaled = ((adjusted[:, channel] - source_median[channel])
+                  * (target_spread[channel] / source_spread[channel])
+                  + target_median[channel])
+        adjusted[:, channel] += (scaled - adjusted[:, channel]) * strength
+
+    lab[selected] = adjusted
+    corrected = np.clip(lab2rgb(lab) * 255.0, 0, 255).astype('uint8')
+    return Image.fromarray(corrected)
+
+
 def person_area_mask(parsed, grow_px=0):
     """SCHP 파싱 결과에서 인물 영역만 뽑는다. 흰색(255)이 사람.
 
@@ -177,7 +239,7 @@ def default_guidance(cloth_type):
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
            guidance_scale=None, seed=42, scheduler=DEFAULT_SCHEDULER,
            eta=1.0, return_timing=False, composite=True,
-           normalize_background=False, background_grow_px=0):
+           normalize_background=False, background_grow_px=0, color_match=0.0):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
@@ -198,6 +260,8 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         흰색을 옷에서 떼어놓는 방법을 검증 중이다.
         인물 파싱이 실패하면 자동으로 건너뛴다.
     background_grow_px: 배경 정규화 시 인물 영역을 몇 픽셀 넓힐지
+    color_match: 0~1. 생성된 옷 영역의 색조를 원본 옷 사진에 맞춘다(후처리).
+        확산 설정으로 해결되지 않던 색조 차이를 직접 잡는다. 1이면 완전히 맞춘다
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
@@ -262,6 +326,14 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         pipeline.noise_scheduler = original_scheduler
 
     t2 = time.perf_counter()
+
+    if color_match > 0:
+        # 확산 설정으로는 옷 색조를 맞추지 못했다(다크 네이비 -> 밝은 워싱).
+        # 정답 색은 입력 옷 사진에 있으므로 후처리로 맞춘다. 합성 전에 적용해
+        # 마스크 경계에서 피부까지 물들지 않게 한다.
+        if result.size != person.size:
+            result = result.resize(person.size, Image.LANCZOS)
+        result = match_garment_color(result, person, mask, garment, strength=color_match)
 
     if composite:
         # CatVTON 파이프라인은 latent 전체를 디코딩해 돌려준다. 즉 **마스크 밖도

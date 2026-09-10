@@ -57,7 +57,7 @@ def run(*args):
 subprocess.call('apt-get -qq install -y fonts-nanum > /dev/null 2>&1', shell=True)
 run(os.path.join(REPO_DIR, 'scripts', 'setup_env.py'))
 run(os.path.join(REPO_DIR, 'scripts', 'real_garment_check.py'),
-    '--garments', garments, '--person', person, '--config-set', os.environ.get('VFA_CONFIG_SET', 'grow'))
+    '--garments', garments, '--person', person, '--config-set', os.environ.get('VFA_CONFIG_SET', 'color'))
 
 print('\n=== /kaggle/working 결과물 ===', flush=True)
 for root, _dirs, files in os.walk('/kaggle/working'):

@@ -111,6 +111,18 @@ CONFIG_SETS = {
         ('배경 그대로 s7', 'dpm', 8, None, True, 7, False, 0),
         ('흰 배경 s7', 'dpm', 8, None, True, 7, True, 0),
     ],
+    # 옷 색조를 후처리로 맞추는 효과. 확산 설정으로는 다크 네이비 코듀로이가
+    # 계속 밝은 워싱 데님으로 나왔는데, 정답 색은 입력 옷 사진에 있으므로
+    # 생성 결과의 옷 영역 색 통계를 거기 맞춘다.
+    # 같은 시드로 짝지어 비교한다 (9번째 항목이 보정 강도).
+    'color': [
+        ('보정없음 s42', 'dpm', 8, None, True, 42, False, 0, 0.0),
+        ('색보정 0.7 s42', 'dpm', 8, None, True, 42, False, 0, 0.7),
+        ('색보정 1.0 s42', 'dpm', 8, None, True, 42, False, 0, 1.0),
+        ('보정없음 s123', 'dpm', 8, None, True, 123, False, 0, 0.0),
+        ('색보정 0.7 s123', 'dpm', 8, None, True, 123, False, 0, 0.7),
+        ('색보정 1.0 s123', 'dpm', 8, None, True, 123, False, 0, 1.0),
+    ],
     # 흰 배경이 옷 안으로 번지는 문제. 팔이 몸통에서 떨어져 있으면 팔 옆의
     # 흰 배경이 소매로 끌려 들어와 흰 얼룩이 생긴다(긴팔 셔츠에서 관찰).
     # 인물 실루엣을 넓혀 흰색을 옷에서 떼어놓으면 해결되는지 본다.
@@ -239,13 +251,20 @@ def main():
         mask = masks[cloth_type]
 
         results, reference_path = [], None
-        for label, scheduler, steps, guidance, composite, seed, white_bg, grow in CONFIGS:
+        for entry in CONFIGS:
+            # 항목이 계속 늘어나서(합성/시드/배경/팽창/색보정) 뒤쪽은 선택으로 둔다.
+            # 기존 설정 묶음을 건드리지 않고 새 축을 추가할 수 있다.
+            label, scheduler, steps, guidance, composite, seed, white_bg, grow = entry[:8]
+            color_match = entry[8] if len(entry) > 8 else 0.0
+
             seed = args.seed if seed is None else seed
             if guidance is None:
                 guidance = default_guidance(cloth_type)
             slug = f'{name}_{scheduler}{steps}_g{guidance:g}_s{seed}'
             if white_bg:
                 slug += f'_whitebg{grow}'
+            if color_match:
+                slug += f'_color{color_match:g}'
             if not composite:
                 slug += '_nocomp'
             out_path = os.path.join(OUT_DIR, f'{slug}.png')
@@ -259,6 +278,7 @@ def main():
                     steps=steps, guidance_scale=guidance, seed=seed,
                     scheduler=scheduler, return_timing=True, composite=composite,
                     normalize_background=white_bg, background_grow_px=grow,
+                    color_match=color_match,
                 )
                 result.save(out_path)
                 seconds = timing['total_s']

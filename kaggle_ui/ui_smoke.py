@@ -10,6 +10,7 @@
 4. **run() 을 실제로 호출해 try_on 에 넘기는 인자가 맞는가**
 5. 서버가 실제로 뜨고 200을 돌려주는가
 """
+import ast
 import os
 import subprocess
 import sys
@@ -34,6 +35,27 @@ fake = types.ModuleType('tryon_core')
 fake.REPO_DIR = '/kaggle/tmp/none'
 fake.load_models = lambda *a, **k: None
 
+# gradio_app 은 tryon_core 에서 기본값 상수들도 가져온다(DEFAULT_STEPS 등).
+# 손으로 나열하면 상수를 추가할 때마다 여기서 ImportError가 난다(실제로 났다).
+# **진짜 소스를 AST로 읽어** 모듈 수준 상수를 그대로 옮겨온다. torch를 임포트하지
+# 않으므로 GPU 없이도 안전하다.
+_core_source = os.path.join(REPO_DIR, 'app', 'tryon_core.py')
+with open(_core_source, encoding='utf-8') as f:
+    _core_tree = ast.parse(f.read())
+_copied = []
+for _node in _core_tree.body:
+    if not isinstance(_node, ast.Assign):
+        continue
+    for _target in _node.targets:
+        if not isinstance(_target, ast.Name) or _target.id.startswith('_'):
+            continue
+        try:
+            setattr(fake, _target.id, ast.literal_eval(_node.value))
+            _copied.append(_target.id)
+        except ValueError:
+            pass  # 리터럴이 아닌 값(호출 결과 등)은 UI가 쓰지 않는다
+print('가짜 tryon_core 에 옮긴 상수:', _copied, flush=True)
+
 
 def _fake_try_on(**kwargs):
     from PIL import Image
@@ -41,6 +63,8 @@ def _fake_try_on(**kwargs):
 
 
 fake.try_on = _fake_try_on
+fake.default_guidance = lambda cloth_type: getattr(
+    fake, 'DEFAULT_GUIDANCE_BY_TYPE', {}).get(cloth_type, fake.DEFAULT_GUIDANCE)
 sys.modules['tryon_core'] = fake
 
 sys.path.insert(0, os.path.join(REPO_DIR, 'app'))

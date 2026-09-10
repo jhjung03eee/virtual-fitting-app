@@ -110,6 +110,40 @@ class TestGradioWiring(unittest.TestCase):
                     f'{fn.id}() 가 정의돼 있지 않다',
                 )
 
+    def test_imports_from_tryon_core_all_exist(self):
+        """gradio_app 이 tryon_core 에서 가져오는 이름이 실제로 있는지.
+
+        `from tryon_core import DEFAULT_STEPS` 같은 줄은 앱을 띄우는 순간
+        ImportError로 죽는다. 로컬에서는 torch가 없어 gradio_app을 임포트할 수
+        없으므로 Kaggle에 올려야 알 수 있었는데, 실제로 그렇게 한 번 터졌다.
+        두 파일 모두 AST로 읽으면 GPU 없이 잡을 수 있다.
+        """
+        core_path = os.path.join(os.path.dirname(APP_PATH), 'tryon_core.py')
+        with open(core_path, encoding='utf-8') as f:
+            core = ast.parse(f.read())
+
+        defined = set()
+        for node in core.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                defined.add(node.name)
+            elif isinstance(node, ast.Assign):
+                defined.update(t.id for t in node.targets if isinstance(t, ast.Name))
+            elif isinstance(node, ast.ImportFrom):
+                defined.update(a.asname or a.name for a in node.names)
+            elif isinstance(node, ast.Import):
+                defined.update((a.asname or a.name).split('.')[0] for a in node.names)
+
+        wanted = [a.name for node in ast.walk(self.tree)
+                  if isinstance(node, ast.ImportFrom) and node.module == 'tryon_core'
+                  for a in node.names]
+        self.assertTrue(wanted, 'gradio_app 이 tryon_core 에서 아무것도 안 가져온다')
+
+        missing = [name for name in wanted if name not in defined]
+        self.assertEqual(
+            missing, [],
+            f'tryon_core 에 없는 이름을 가져온다: {missing}. 앱 시작 시 ImportError가 난다.',
+        )
+
     def test_run_passes_background_option(self):
         """배경 정규화 체크박스가 try_on 까지 실제로 전달되는지.
 

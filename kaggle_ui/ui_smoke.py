@@ -123,7 +123,10 @@ def _recording_try_on(**kwargs):
     return Image.new('RGB', (76, 102), 'gray'), Image.new('RGB', (76, 102), 'black')
 
 
-fake.try_on = _recording_try_on
+# gradio_app 은 `from tryon_core import try_on` 으로 **이미 이름을 바인딩**했다.
+# 여기서 fake.try_on 을 바꿔도 gradio_app.try_on 은 옛 함수를 그대로 가리킨다.
+# 바꿔치기는 gradio_app 의 이름 공간에 해야 한다.
+gradio_app.try_on = _recording_try_on
 
 from PIL import Image  # noqa: E402
 

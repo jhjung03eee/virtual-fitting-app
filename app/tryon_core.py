@@ -99,7 +99,7 @@ def _to_image(x):
     return ImageOps.exif_transpose(image)
 
 
-def person_area_mask(parsed):
+def person_area_mask(parsed, grow_px=0):
     """SCHP 파싱 결과에서 인물 영역만 뽑는다. 흰색(255)이 사람.
 
     ATR/LIP 두 파싱 모두 **0번 라벨이 배경**이므로 0이 아닌 곳이 사람이다.
@@ -127,6 +127,15 @@ def person_area_mask(parsed):
         return None
 
     mask = Image.fromarray((area * 255).astype('uint8'), mode='L')
+
+    # SCHP 실루엣이 몸에 딱 붙어 있으면, 팔처럼 가느다란 부위 바로 옆까지
+    # 흰 배경이 닿는다. 그러면 모델이 그 흰색을 옷 안으로 끌고 들어와
+    # 소매에 흰 얼룩이 생긴다(실제로 긴팔 셔츠에서 관찰됨).
+    # 인물 영역을 몇 픽셀 넓혀 흰색을 옷에서 떼어놓는다.
+    if grow_px > 0:
+        size = grow_px * 2 + 1
+        mask = mask.filter(ImageFilter.MaxFilter(size if size % 2 else size + 1))
+
     # 실루엣 경계가 계단처럼 되지 않게 아주 약하게만 흐린다
     return mask.filter(ImageFilter.GaussianBlur(2))
 
@@ -168,7 +177,7 @@ def default_guidance(cloth_type):
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
            guidance_scale=None, seed=42, scheduler=DEFAULT_SCHEDULER,
            eta=1.0, return_timing=False, composite=True,
-           normalize_background=True):
+           normalize_background=False, background_grow_px=0):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
@@ -182,9 +191,13 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     normalize_background: 인물만 오려 흰 배경에 올린 뒤 합성한다(배경 정규화).
         학습 데이터(VITON-HD/DressCode)가 전부 흰 배경 스튜디오 촬영이라,
         복도 같은 배경이 들어간 사진은 분포 밖이 되어 성공률이 떨어진다.
-        실측: 사진 프린트 티셔츠가 배경 그대로면 3개 시드 중 1개 성공,
-        흰 배경이면 3개 중 3개 성공. 하의도 붕괴 사례가 사라졌다.
+        효과가 옷에 따라 갈린다. 사진 프린트 티셔츠는 성공률이 오르지만
+        (3개 시드 중 1개 -> 3개), **긴팔 셔츠는 소매에 흰 얼룩이 생겨 나빠진다.**
+        팔이 몸통에서 떨어져 있으면 팔 옆의 흰 배경이 소매 안으로 번진다.
+        그래서 기본값은 꺼 두고, background_grow_px 로 실루엣을 넓혀
+        흰색을 옷에서 떼어놓는 방법을 검증 중이다.
         인물 파싱이 실패하면 자동으로 건너뛴다.
+    background_grow_px: 배경 정규화 시 인물 영역을 몇 픽셀 넓힐지
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
@@ -219,7 +232,7 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         # 복도·패턴 바닥이 들어간 사진은 분포 밖이라 성공률이 떨어진다.
         # 인물만 오려 흰 배경에 올려서 입력을 학습 분포 쪽으로 민다.
         # 원래 배경은 마지막 합성에서 되돌아온다(composite가 원본 person을 쓴다).
-        person_area = person_area_mask(parsed)
+        person_area = person_area_mask(parsed, grow_px=background_grow_px)
         if person_area is not None:
             model_input = Image.composite(
                 person, Image.new('RGB', person.size, 'white'), person_area)

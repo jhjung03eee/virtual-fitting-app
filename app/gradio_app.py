@@ -133,7 +133,7 @@ def size_advice(chart_file, height, shoulder, chest, waist, hip) -> str:
 
 
 def run(person, garment, cloth_label, scheduler, steps, guidance_scale, seed,
-        chart_file, height, shoulder, chest, waist, hip):
+        normalize_background, chart_file, height, shoulder, chest, waist, hip):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
 
@@ -147,6 +147,7 @@ def run(person, garment, cloth_label, scheduler, steps, guidance_scale, seed,
         guidance_scale=float(guidance_scale),
         seed=int(seed),
         scheduler=scheduler,
+        normalize_background=bool(normalize_background),
     )
     return result, advice, mask_vis
 
@@ -217,6 +218,12 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                     label='guidance scale (1.0이면 2배 빨라지지만 옷이 무너진다. 그대로 둘 것)',
                 )
                 seed_in = gr.Number(value=42, precision=0, label='시드 (-1이면 매번 랜덤)')
+                bg_in = gr.Checkbox(
+                    value=True,
+                    label='배경 정규화 (인물만 오려 흰 배경에서 합성)',
+                    info='학습 데이터가 흰 배경이라 복잡한 배경 사진의 성공률이 올라간다. '
+                         '원래 배경은 결과에 그대로 돌아온다.',
+                )
             run_btn = gr.Button('피팅 해보기', variant='primary')
 
         with gr.Column():
@@ -231,7 +238,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
     run_btn.click(
         fn=run,
         inputs=[person_in, garment_in, cloth_in, sched_in, steps_in, guidance_in, seed_in,
-                chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
+                bg_in, chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
         outputs=[result_out, size_out, mask_out],
     )
 

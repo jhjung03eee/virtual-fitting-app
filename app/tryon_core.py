@@ -119,6 +119,13 @@ def person_area_mask(parsed):
     if lip.shape == atr.shape:
         area |= (lip != 0)
 
+    # 파싱이 실패하면 인물 영역이 터무니없이 작거나 커진다. 그 마스크로
+    # 배경을 지우면 사람이 잘려나가거나 배경이 그대로 남는다. 그럴 바에는
+    # 배경 정규화를 건너뛰는 게 낫다.
+    fraction = float(area.mean())
+    if not 0.10 <= fraction <= 0.90:
+        return None
+
     mask = Image.fromarray((area * 255).astype('uint8'), mode='L')
     # 실루엣 경계가 계단처럼 되지 않게 아주 약하게만 흐린다
     return mask.filter(ImageFilter.GaussianBlur(2))
@@ -161,7 +168,7 @@ def default_guidance(cloth_type):
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
            guidance_scale=None, seed=42, scheduler=DEFAULT_SCHEDULER,
            eta=1.0, return_timing=False, composite=True,
-           normalize_background=False):
+           normalize_background=True):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
@@ -173,7 +180,11 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         1.0 이하면 CFG가 꺼져 배치가 절반 -> 약 2배 빠르지만 옷이 무너진다
     composite: 마스크 밖을 원본 사진으로 되돌린다. 아래 주석 참고
     normalize_background: 인물만 오려 흰 배경에 올린 뒤 합성한다(배경 정규화).
-        학습 데이터가 전부 흰 배경이라, 복잡한 배경 사진의 성공률을 올리려는 시도다
+        학습 데이터(VITON-HD/DressCode)가 전부 흰 배경 스튜디오 촬영이라,
+        복도 같은 배경이 들어간 사진은 분포 밖이 되어 성공률이 떨어진다.
+        실측: 사진 프린트 티셔츠가 배경 그대로면 3개 시드 중 1개 성공,
+        흰 배경이면 3개 중 3개 성공. 하의도 붕괴 사례가 사라졌다.
+        인물 파싱이 실패하면 자동으로 건너뛴다.
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
@@ -209,8 +220,9 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         # 인물만 오려 흰 배경에 올려서 입력을 학습 분포 쪽으로 민다.
         # 원래 배경은 마지막 합성에서 되돌아온다(composite가 원본 person을 쓴다).
         person_area = person_area_mask(parsed)
-        model_input = Image.composite(
-            person, Image.new('RGB', person.size, 'white'), person_area)
+        if person_area is not None:
+            model_input = Image.composite(
+                person, Image.new('RGB', person.size, 'white'), person_area)
     _sync()
     t1 = time.perf_counter()
 

@@ -26,8 +26,8 @@ CatVTON 저장소에 **cp39 전용으로 컴파일된 detectron2 `.so`** 가 들
 테스트가 임포트하지 않는 스크립트는 깨져도 테스트가 통과한다. 실제로 그렇게
 깨진 파일을 커밋한 적 있다.
 ```sh
-for f in $(git ls-files '*.py'); do python -c "import ast,sys;ast.parse(open(sys.argv[1],encoding='utf-8').read())" "$f" || echo "SYNTAX ERROR: $f"; done
-python -m unittest discover -s tests   # 102건
+python scripts/check_syntax.py          # 추적 중인 .py 전체
+python -m unittest discover -s tests    # 117건
 ```
 
 **3. 저작권·개인정보 파일은 커밋하지 않는다.**

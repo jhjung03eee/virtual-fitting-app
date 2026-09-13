@@ -1,0 +1,15 @@
+{
+  "id": "jefferyjung/vfa-set2-check",
+  "title": "vfa-set2-check",
+  "code_file": "run_set2.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": ["jefferyjung/vfa-set2"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

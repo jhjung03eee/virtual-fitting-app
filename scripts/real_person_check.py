@@ -48,7 +48,7 @@ GPU_NAME = torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'
 
 OUT_DIR = os.path.join(OUT_ROOT, 'real_person')
 CSV_PATH = os.path.join(OUT_DIR, 'results.csv')
-FIELDS = ['person', 'garment', 'cloth_type', 'steps', 'scheduler',
+FIELDS = ['person', 'garment', 'cloth_type', 'steps', 'seed', 'scheduler',
           'mask_s', 'diffusion_s', 'total_s', 'out_path', 'mask_path',
           'platform', 'gpu']
 
@@ -75,6 +75,8 @@ def main():
     ap.add_argument('--garments', required=True, help='옷 사진 폴더')
     ap.add_argument('--steps', type=int, default=DEFAULT_STEPS)
     ap.add_argument('--seed', type=int, default=42)
+    ap.add_argument('--seeds', default=None,
+                    help='쉼표로 구분한 시드 목록 (예: 42,123,7). 생략하면 --seed 하나')
     args = ap.parse_args()
 
     persons = find_images(args.persons)
@@ -92,6 +94,10 @@ def main():
     load_models()
     print('모델 로딩 완료\n', flush=True)
 
+    # 결과가 시드에 따라 크게 흔들린다(같은 설정에서 프린트가 나왔다 말았다 했다).
+    # 한 장만 보고 판단하면 운을 품질로 착각하므로 시드 여러 개를 함께 돌린다.
+    seeds = [int(s) for s in str(args.seeds or args.seed).split(',') if s.strip()]
+
     for person in persons:
         person_name = os.path.splitext(os.path.basename(person))[0]
         print(f'--- {person_name} ---', flush=True)
@@ -101,30 +107,35 @@ def main():
             garment_name = os.path.splitext(os.path.basename(garment))[0]
             cloth_type = cloth_type_of(garment)
 
-            result, mask_vis, timing = try_on(
-                person=person, garment=garment, cloth_type=cloth_type,
-                steps=args.steps, seed=args.seed, return_timing=True)
+            for seed in seeds:
+                result, mask_vis, timing = try_on(
+                    person=person, garment=garment, cloth_type=cloth_type,
+                    steps=args.steps, seed=seed, return_timing=True)
 
-            out_path = os.path.join(OUT_DIR, f'{person_name}__{garment_name}.png')
-            mask_path = os.path.join(OUT_DIR, f'{person_name}__{garment_name}_mask.png')
-            result.save(out_path)
-            mask_vis.save(mask_path)
+                stem = f'{person_name}__{garment_name}_s{seed}'
+                out_path = os.path.join(OUT_DIR, f'{stem}.png')
+                mask_path = os.path.join(OUT_DIR, f'{stem}_mask.png')
+                result.save(out_path)
+                mask_vis.save(mask_path)
 
-            label = f'{garment_name} ({cloth_type})'
-            results.append((label, out_path, timing['total_s'], None))
-            mask_results.append((label, mask_path, None, None))
-            print(f'  {garment_name} ({cloth_type}): {timing["total_s"]:.1f}초', flush=True)
+                label = f'{garment_name} s{seed}'
+                results.append((label, out_path, timing['total_s'], None))
+                if seed == seeds[0]:
+                    # 마스크는 시드와 무관하므로 첫 시드 것만 붙인다
+                    mask_results.append((garment_name, mask_path, None, None))
+                print(f'  {garment_name} ({cloth_type}) seed {seed}: '
+                      f'{timing["total_s"]:.1f}초', flush=True)
 
-            append_row({
-                'person': person_name, 'garment': garment_name,
-                'cloth_type': cloth_type, 'steps': args.steps,
-                'scheduler': DEFAULT_SCHEDULER, 'mask_s': timing['mask_s'],
-                'diffusion_s': timing['diffusion_s'], 'total_s': timing['total_s'],
-                'out_path': out_path, 'mask_path': mask_path,
-                'platform': PLATFORM, 'gpu': GPU_NAME,
-            })
+                append_row({
+                    'person': person_name, 'garment': garment_name,
+                    'cloth_type': cloth_type, 'steps': args.steps, 'seed': seed,
+                    'scheduler': DEFAULT_SCHEDULER, 'mask_s': timing['mask_s'],
+                    'diffusion_s': timing['diffusion_s'], 'total_s': timing['total_s'],
+                    'out_path': out_path, 'mask_path': mask_path,
+                    'platform': PLATFORM, 'gpu': GPU_NAME,
+                })
 
-        caption = f'{person_name} · {args.steps}스텝 · {PLATFORM} {GPU_NAME}'
+        caption = f'{person_name} · {args.steps}스텝 · 시드 {seeds} · {PLATFORM} {GPU_NAME}'
         grid = build_grid(person, results,
                           os.path.join(OUT_DIR, f'compare_{person_name}.png'),
                           caption=caption)

@@ -1,0 +1,39 @@
+{
+  "name": "아날로그무드 소프트 무지 반팔티 (카키)",
+  "category": "upper",
+  "source": "무신사 상품 페이지의 실측 사이즈 표에서 옮긴 값 (2026-09-13 확인)",
+  "url": "https://www.musinsa.com/products/5140290",
+  "unit": "cm (단면)",
+  "sizes": {
+    "S": {
+      "length": 62.0,
+      "shoulder": 49.0,
+      "chest": 52.0,
+      "sleeve": 20.0
+    },
+    "M": {
+      "length": 66.0,
+      "shoulder": 51.0,
+      "chest": 54.0,
+      "sleeve": 21.0
+    },
+    "L": {
+      "length": 70.0,
+      "shoulder": 53.0,
+      "chest": 56.0,
+      "sleeve": 22.0
+    },
+    "XL": {
+      "length": 74.0,
+      "shoulder": 55.0,
+      "chest": 58.0,
+      "sleeve": 23.0
+    },
+    "XXL": {
+      "length": 78.0,
+      "shoulder": 58.0,
+      "chest": 64.0,
+      "sleeve": 24.0
+    }
+  }
+}

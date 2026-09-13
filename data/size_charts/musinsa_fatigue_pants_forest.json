@@ -1,0 +1,44 @@
+{
+  "name": "유니폼브릿지 코튼 퍼티그 팬츠 레귤러 핏 (포레스트)",
+  "category": "lower",
+  "source": "무신사 상품 페이지의 실측 사이즈 표에서 옮긴 값 (2026-09-13 확인)",
+  "url": "https://www.musinsa.com/products/2383020",
+  "unit": "cm (단면)",
+  "sizes": {
+    "S": {
+      "length": 103.0,
+      "waist": 38.0,
+      "thigh": 31.0,
+      "rise": 30.0,
+      "hem": 20.0
+    },
+    "M": {
+      "length": 104.0,
+      "waist": 40.0,
+      "thigh": 32.0,
+      "rise": 32.0,
+      "hem": 22.0
+    },
+    "L": {
+      "length": 105.0,
+      "waist": 42.0,
+      "thigh": 33.0,
+      "rise": 33.0,
+      "hem": 23.0
+    },
+    "XL": {
+      "length": 106.0,
+      "waist": 44.0,
+      "thigh": 34.0,
+      "rise": 34.0,
+      "hem": 24.0
+    },
+    "XXL": {
+      "length": 108.0,
+      "waist": 46.0,
+      "thigh": 35.0,
+      "rise": 35.0,
+      "hem": 25.0
+    }
+  }
+}

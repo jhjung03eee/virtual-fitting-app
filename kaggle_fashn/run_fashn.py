@@ -73,6 +73,8 @@ if len(persons) != 4 or len(garments) != 4:
     tree = [f'  {r}: {sorted(fs)[:5]}' for r, _d, fs in os.walk('/kaggle/input')]
     sys.exit('입력 개수가 예상(인물 4, 옷 4)과 다릅니다.\n' + '\n'.join(tree[:30]))
 
+# pip install -e 는 새 프로세스부터 경로가 잡힌다. 같은 프로세스에서 쓰려면 직접 넣어야 한다(v1 실패 원인).
+sys.path.insert(0, os.path.join(REPO, 'src'))
 from fashn_vton import TryOnPipeline  # noqa: E402
 
 t0 = time.time()

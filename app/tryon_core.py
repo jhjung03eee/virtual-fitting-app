@@ -191,7 +191,7 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
            guidance_scale=None, seed=42, scheduler=DEFAULT_SCHEDULER,
            eta=1.0, return_timing=False, composite=True,
            normalize_background=False, background_grow_px=0, color_match=0.0,
-           zoom=False):
+           zoom=False, warp=None, strength=1.0):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
@@ -216,6 +216,8 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         확산 설정으로 해결되지 않던 색조 차이를 직접 잡는다. 1이면 완전히 맞춘다
     zoom: 옷 영역만 원본 해상도에서 잘라 다시 합성하고 원본 사진에 붙인다(질감 선명도).
         결과는 원본 해상도로 나오고 시간은 약 두 배. 옷이 이미 화면을 채우면 건너뛴다
+    warp: (변형된 옷 PIL, 옷을 쓸 영역 마스크 PIL) — 둘 다 768x1024. 주면 하이브리드 합성
+    strength: 하이브리드에서 초안을 얼마나 다시 그릴지 (1이면 초안 무시, 낮을수록 초안을 따름)
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
@@ -234,7 +236,10 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     options = dict(cloth_type=cloth_type, steps=steps, guidance_scale=guidance_scale,
                    seed=seed, scheduler=scheduler, eta=eta, composite=composite,
                    normalize_background=normalize_background,
-                   background_grow_px=background_grow_px, color_match=color_match)
+                   background_grow_px=background_grow_px, color_match=color_match,
+                   warp=warp, strength=strength)
+    if warp is not None and zoom:
+        raise ValueError('하이브리드(warp)와 줌은 같이 쓸 수 없다 (변형 결과가 768x1024 기준)')
 
     full = _crop_to_aspect(_to_image(person).convert('RGB'))
     small = full.resize((WIDTH, HEIGHT), Image.LANCZOS)
@@ -318,7 +323,8 @@ def _zoom_box(mask, full_size, margin=0.15, min_gain=1.3):
 
 
 def _generate(person, garment, cloth_type, steps, guidance_scale, seed, scheduler, eta,
-              composite, normalize_background, background_grow_px, color_match):
+              composite, normalize_background, background_grow_px, color_match,
+              warp=None, strength=1.0):
     """768x1024 인물 한 장에 대한 마스크 생성 + 확산 + 후처리."""
     pipeline, automasker, mask_processor, device = load_models()
     from model.cloth_masker import vis_mask
@@ -355,15 +361,26 @@ def _generate(person, garment, cloth_type, steps, guidance_scale, seed, schedule
 
     try:
         generator = torch.Generator(device=device).manual_seed(seed) if seed != -1 else None
-        result = pipeline(
-            image=model_input,
-            condition_image=garment,
-            mask=mask,
-            num_inference_steps=steps,
-            guidance_scale=guidance_scale,
-            generator=generator,
-            eta=eta,
-        )[0]
+        if warp is not None:
+            # 하이브리드: 변형된 옷 초안에서 출발 (app/hybrid_tryon.py 설명 참고)
+            from hybrid_tryon import make_draft, run_from_draft
+            if scheduler != 'ddim':
+                raise ValueError('하이브리드(warp)는 DDIM에서만 동작한다')
+            draft = make_draft(person, mask, *warp)
+            result = run_from_draft(
+                pipeline, model_input, garment, mask, draft, strength=strength,
+                num_inference_steps=steps, guidance_scale=guidance_scale,
+                generator=generator, eta=eta)
+        else:
+            result = pipeline(
+                image=model_input,
+                condition_image=garment,
+                mask=mask,
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+                eta=eta,
+            )[0]
         _sync()
     finally:
         pipeline.noise_scheduler = original_scheduler

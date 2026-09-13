@@ -1,0 +1,15 @@
+{
+  "id": "jefferyjung/vfa-texture",
+  "title": "vfa-texture",
+  "code_file": "run_texture.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": ["jefferyjung/vfa-set2", "jefferyjung/vfa-person-photos", "jefferyjung/vfa-person-full"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

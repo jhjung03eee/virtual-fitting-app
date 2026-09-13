@@ -181,7 +181,8 @@ def default_guidance(cloth_type):
 def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
            guidance_scale=None, seed=42, scheduler=DEFAULT_SCHEDULER,
            eta=1.0, return_timing=False, composite=True,
-           normalize_background=False, background_grow_px=0, color_match=0.0):
+           normalize_background=False, background_grow_px=0, color_match=0.0,
+           zoom=False):
     """인물 사진에 옷을 합성한다.
 
     person/garment: 파일 경로 또는 PIL.Image
@@ -204,6 +205,8 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     background_grow_px: 배경 정규화 시 인물 영역을 몇 픽셀 넓힐지
     color_match: 0~1. 생성된 옷 영역의 색조를 원본 옷 사진에 맞춘다(후처리).
         확산 설정으로 해결되지 않던 색조 차이를 직접 잡는다. 1이면 완전히 맞춘다
+    zoom: 옷 영역만 원본 해상도에서 잘라 다시 합성하고 원본 사진에 붙인다(질감 선명도).
+        결과는 원본 해상도로 나오고 시간은 약 두 배. 옷이 이미 화면을 채우면 건너뛴다
 
     반환: (result, mask_vis) 또는 return_timing=True면 (result, mask_vis, timing dict)
     """
@@ -216,11 +219,100 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
 
     pipeline, automasker, mask_processor, device = load_models()
 
-    from model.cloth_masker import vis_mask
-    from utils import resize_and_crop, resize_and_padding
+    from utils import resize_and_padding
 
-    person = resize_and_crop(_to_image(person).convert('RGB'), (WIDTH, HEIGHT))
     garment = resize_and_padding(_to_image(garment).convert('RGB'), (WIDTH, HEIGHT))
+    options = dict(cloth_type=cloth_type, steps=steps, guidance_scale=guidance_scale,
+                   seed=seed, scheduler=scheduler, eta=eta, composite=composite,
+                   normalize_background=normalize_background,
+                   background_grow_px=background_grow_px, color_match=color_match)
+
+    full = _crop_to_aspect(_to_image(person).convert('RGB'))
+    small = full.resize((WIDTH, HEIGHT), Image.LANCZOS)
+
+    # 줌: 전신 사진을 768x1024에 통째로 넣으면 옷이 폭 200px 남짓으로 쪼그라들어
+    # latent 25칸 정도에 그려진다 — 원본 옷 사진의 질감이 들어갈 자리가 없다.
+    # 학습 데이터(VITON-HD)는 옷이 화면을 채우는 상반신 컷이므로, 1차 마스크로 옷
+    # 영역을 찾아 원본 고해상도 사진에서 그 부분만 잘라 다시 합성하고 원본에 붙인다.
+    box = None
+    if zoom:
+        t_mask = time.perf_counter()
+        parsed = automasker.preprocess_image(small)
+        first_mask = automasker.cloth_agnostic_mask(
+            parsed['densepose'], parsed['schp_lip'], parsed['schp_atr'], part=cloth_type)
+        box = _zoom_box(first_mask, full.size)
+        first_mask_s = time.perf_counter() - t_mask
+    if box is None:
+        result, _mask, mask_vis, timing = _generate(small, garment, **options)
+        return (result, mask_vis, timing) if return_timing else (result, mask_vis)
+    crop = full.crop(box)
+    crop_small = crop.resize((WIDTH, HEIGHT), Image.LANCZOS)
+    zoomed, crop_mask, mask_vis, timing = _generate(
+        crop_small, garment, **dict(options, composite=False))
+
+    size = (box[2] - box[0], box[3] - box[1])
+    zoomed = zoomed.resize(size, Image.LANCZOS)
+    out = full.copy()
+    if composite:
+        blend = crop_mask.convert('L').resize(size, Image.LANCZOS)
+        zoomed = Image.composite(zoomed, crop, blend)
+    out.paste(zoomed, box[:2])
+    timing['mask_s'] = round(timing['mask_s'] + first_mask_s, 2)
+    timing['total_s'] = round(timing['total_s'] + first_mask_s, 2)
+    return (out, mask_vis, timing) if return_timing else (out, mask_vis)
+
+
+def _crop_to_aspect(image):
+    """가운데를 3:4로 자른다 (CatVTON utils.resize_and_crop 과 같은 영역).
+
+    줌에서 1차 마스크 좌표를 원본 좌표로 되돌려야 하므로 직접 자른다.
+    """
+    w, h = image.size
+    target = WIDTH / HEIGHT
+    if w / h > target:
+        new_w = round(h * target)
+        left = (w - new_w) // 2
+        return image.crop((left, 0, left + new_w, h))
+    new_h = round(w / target)
+    top = (h - new_h) // 2
+    return image.crop((0, top, w, top + new_h))
+
+
+def _zoom_box(mask, full_size, margin=0.15, min_gain=1.3):
+    """1차 마스크에서 옷 영역을 3:4 상자로 잡아 원본 좌표로 돌려준다.
+
+    확대 이득(원본 폭 / 상자 폭)이 min_gain 보다 작으면 None — 이미 옷이
+    화면을 채우는 사진이라 다시 돌려봐야 시간만 두 배로 든다.
+    """
+    import numpy as np
+    array = np.asarray(mask.convert('L')) > 127
+    if not array.any():
+        return None
+    ys, xs = np.nonzero(array)
+    fw, fh = full_size
+    sx, sy = fw / array.shape[1], fh / array.shape[0]
+    x0, x1 = xs.min() * sx, (xs.max() + 1) * sx
+    y0, y1 = ys.min() * sy, (ys.max() + 1) * sy
+
+    bw, bh = (x1 - x0) * (1 + 2 * margin), (y1 - y0) * (1 + 2 * margin)
+    if bw / bh > WIDTH / HEIGHT:
+        bh = bw * HEIGHT / WIDTH
+    else:
+        bw = bh * WIDTH / HEIGHT
+    if bw >= fw / min_gain:
+        return None
+
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    left = min(max(cx - bw / 2, 0), fw - bw)
+    top = min(max(cy - bh / 2, 0), fh - bh)
+    return (round(left), round(top), round(left + bw), round(top + bh))
+
+
+def _generate(person, garment, cloth_type, steps, guidance_scale, seed, scheduler, eta,
+              composite, normalize_background, background_grow_px, color_match):
+    """768x1024 인물 한 장에 대한 마스크 생성 + 확산 + 후처리."""
+    pipeline, automasker, mask_processor, device = load_models()
+    from model.cloth_masker import vis_mask
 
     _sync()
     t0 = time.perf_counter()
@@ -301,11 +393,11 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
             blend = ImageChops.multiply(blend, person_area)
         result = Image.composite(result, person, blend)
 
+    if not composite and result.size != person.size:
+        result = result.resize(person.size, Image.LANCZOS)
     mask_vis = vis_mask(person, mask)
-    if return_timing:
-        return result, mask_vis, {
-            'mask_s': round(t1 - t0, 2),
-            'diffusion_s': round(t2 - t1, 2),
-            'total_s': round(t2 - t0, 2),
-        }
-    return result, mask_vis
+    return result, mask, mask_vis, {
+        'mask_s': round(t1 - t0, 2),
+        'diffusion_s': round(t2 - t1, 2),
+        'total_s': round(t2 - t0, 2),
+    }

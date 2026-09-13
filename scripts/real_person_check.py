@@ -81,6 +81,9 @@ def main():
                     help='생략하면 기본값 2.5')
     ap.add_argument('--color-match', type=float, default=0.0,
                     help='0~1. 생성된 옷 색조를 원본 옷 사진에 맞춘다')
+    ap.add_argument('--scheduler', default=DEFAULT_SCHEDULER, choices=['ddim', 'dpm'])
+    ap.add_argument('--zoom', action='store_true',
+                    help='옷 영역만 원본 해상도에서 잘라 다시 합성한다 (질감 선명도)')
     ap.add_argument('--only', default=None,
                     help='파일명에 이 문자열이 든 옷만 돌린다 (예: pants)')
     ap.add_argument('--tag', default='',
@@ -121,7 +124,8 @@ def main():
                 result, mask_vis, timing = try_on(
                     person=person, garment=garment, cloth_type=cloth_type,
                     steps=args.steps, seed=seed, return_timing=True,
-                    guidance_scale=args.guidance, color_match=args.color_match)
+                    guidance_scale=args.guidance, color_match=args.color_match,
+                    scheduler=args.scheduler, zoom=args.zoom)
 
                 tag = f'_{args.tag}' if args.tag else ''
                 stem = f'{person_name}__{garment_name}{tag}_s{seed}'
@@ -141,14 +145,15 @@ def main():
                 append_row({
                     'person': person_name, 'garment': garment_name,
                     'cloth_type': cloth_type, 'steps': args.steps, 'seed': seed,
-                    'scheduler': DEFAULT_SCHEDULER, 'mask_s': timing['mask_s'],
+                    'scheduler': args.scheduler, 'mask_s': timing['mask_s'],
                     'diffusion_s': timing['diffusion_s'], 'total_s': timing['total_s'],
                     'out_path': out_path, 'mask_path': mask_path,
                     'platform': PLATFORM, 'gpu': GPU_NAME,
                 })
 
         guidance = '부위별 기본' if args.guidance is None else f'g{args.guidance:g}'
-        caption = (f'{person_name} · {args.steps}스텝 · {guidance} · 색보정 {args.color_match:g}'
+        zoom = ' · 줌' if args.zoom else ''
+        caption = (f'{person_name} · {args.scheduler} {args.steps}스텝{zoom} · {guidance} · 색보정 {args.color_match:g}'
                    f' · 시드 {seeds} · {PLATFORM} {GPU_NAME}')
         suffix = f'_{args.tag}' if args.tag else ''
         grid = build_grid(person, results,

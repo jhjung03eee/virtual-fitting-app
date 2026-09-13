@@ -78,7 +78,7 @@ def main():
     ap.add_argument('--seeds', default=None,
                     help='쉼표로 구분한 시드 목록 (예: 42,123,7). 생략하면 --seed 하나')
     ap.add_argument('--guidance', type=float, default=None,
-                    help='생략하면 부위별 기본값(상의 2.5 / 하의 5.0)')
+                    help='생략하면 기본값 2.5')
     ap.add_argument('--color-match', type=float, default=0.0,
                     help='0~1. 생성된 옷 색조를 원본 옷 사진에 맞춘다')
     ap.add_argument('--only', default=None,

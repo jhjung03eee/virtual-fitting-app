@@ -107,5 +107,59 @@ class TestMatchGarmentColor(unittest.TestCase):
             out[outside], np.asarray(self.result)[outside])
 
 
+class TestNoHaloInsideLooseMask(unittest.TestCase):
+    """AutoMasker 마스크는 옷 모양이 아니라 몸 주위를 넉넉히 덮는 영역이다.
+
+    그 안에서 모델은 옷만 그리는 게 아니라 **옷 주변 배경도 다시 그린다.**
+    마스크 전체를 옷으로 보고 색을 옮기면 그 배경이 옷 색으로 물들어 후광이 생긴다.
+    실제로 셔츠 주위에 파란 후광, 바지 주위에 초록 후광이 생겼다.
+
+    원본 인물 사진과 거의 같은 픽셀은 새로 그려진 옷이 아니므로 건드리지 않는다.
+    """
+
+    def setUp(self):
+        try:
+            import skimage  # noqa: F401
+        except ImportError:
+            self.skipTest('skimage 없음')
+        size = 120
+        self.person = Image.new('RGB', (size, size), (200, 200, 200))   # 원본: 회색 배경
+        array = np.full((size, size, 3), 201, dtype=np.uint8)           # 생성 결과의 배경(원본과 거의 같음)
+        array[30:90, 40:80] = (120, 170, 120)                            # 새로 그려진 옷(연한 초록)
+        self.result = Image.fromarray(array)
+        loose = np.zeros((size, size), dtype=np.uint8)
+        loose[15:105, 25:95] = 255                                       # 옷보다 넉넉한 마스크
+        self.mask = Image.fromarray(loose, mode='L')
+        self.garment = make_garment('white', (40, 70, 40))              # 진한 초록 옷
+        self.painted = np.zeros((size, size), dtype=bool)
+        self.painted[30:90, 40:80] = True
+        self.loose = loose > 0
+
+    def test_background_inside_mask_is_untouched(self):
+        background_in_mask = self.loose & ~self.painted
+        out = np.asarray(match_garment_color(
+            self.result, self.mask, self.garment, strength=1.0, person=self.person)).astype(int)
+        before = np.asarray(self.result).astype(int)
+        drift = np.abs(out[background_in_mask] - before[background_in_mask]).max()
+        self.assertLessEqual(drift, 3, f'마스크 안 배경이 {drift}만큼 물들었다 (후광)')
+
+    def test_painted_garment_still_changes(self):
+        """후광을 막느라 보정 자체가 꺼지면 안 된다."""
+        out = np.asarray(match_garment_color(
+            self.result, self.mask, self.garment, strength=1.0, person=self.person)).astype(int)
+        before = np.asarray(self.result).astype(int)
+        core = np.zeros_like(self.painted)
+        core[45:75, 50:70] = True
+        self.assertGreater(np.abs(out[core] - before[core]).mean(), 10)
+
+    def test_without_person_whole_mask_is_used(self):
+        """person을 주지 않으면 옛 동작(마스크 전체)이다 — 후광이 생기는 걸 확인해 둔다."""
+        background_in_mask = self.loose & ~self.painted
+        out = np.asarray(match_garment_color(
+            self.result, self.mask, self.garment, strength=1.0)).astype(int)
+        before = np.asarray(self.result).astype(int)
+        self.assertGreater(np.abs(out[background_in_mask] - before[background_in_mask]).max(), 3)
+
+
 if __name__ == '__main__':
     unittest.main()

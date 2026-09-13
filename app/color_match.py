@@ -54,8 +54,32 @@ def _robust_stats(values):
     return median, spread
 
 
-def match_garment_color(result, mask, garment, strength=1.0):
+def painted_weight(result, person, mask, threshold=18.0, width=20.0):
+    """마스크 안에서 **실제로 새로 그려진 픽셀**의 가중치(0~1)를 돌려준다.
+
+    AutoMasker 마스크는 옷 모양이 아니라 몸 주위를 넉넉히 덮는 영역이라,
+    그 안에서 모델은 옷 주변 배경도 다시 그린다. 마스크 전체를 옷으로 보고
+    색을 옮기면 그 배경이 옷 색으로 물들어 **후광**이 생긴다
+    (실제로 셔츠 주위에 파란 후광, 바지 주위에 초록 후광이 생겼다).
+
+    원본 인물 사진과 거의 같은 픽셀은 옷이 아니다(배경이나 남은 부분).
+    RGB 차이가 threshold 이하면 0, threshold+width 이상이면 1, 사이는 부드럽게 잇는다.
+    """
+    inside = np.asarray(mask.convert('L'), dtype=np.float64) / 255.0
+    if person is None:
+        return inside
+    a = np.asarray(result.convert('RGB'), dtype=np.float64)
+    b = np.asarray(person.convert('RGB').resize(result.size), dtype=np.float64)
+    difference = np.abs(a - b).mean(axis=2)
+    changed = np.clip((difference - threshold) / width, 0.0, 1.0)
+    return inside * changed
+
+
+def match_garment_color(result, mask, garment, strength=1.0, person=None):
     """result의 mask 안쪽 색조를 garment에 맞춘다. PIL 이미지를 돌려준다.
+
+    person 을 주면 마스크 안에서도 원본과 달라진 픽셀만 보정한다(후광 방지).
+    파이프라인에서는 항상 주는 게 맞다. 없으면 마스크 전체를 옷으로 본다.
 
     LAB 색공간에서 중앙값과 MAD를 맞춘다. 로버스트 통계를 쓰는 이유는
     마스크 안에 피부(반팔의 팔)나 그림자가 섞여도 덜 끌려가기 때문이다.
@@ -73,23 +97,26 @@ def match_garment_color(result, mask, garment, strength=1.0):
     except ImportError:
         return result
 
-    selected = np.asarray(mask.convert('L')) > 127
-    if not selected.any():
+    weight = painted_weight(result, person, mask)
+    # 통계는 확실히 옷인 픽셀로만 낸다. 경계의 반쯤 섞인 픽셀이 들어가면 목표가 흐려진다.
+    confident = weight > 0.9
+    if not confident.any():
         return result
 
     lab = rgb2lab(np.asarray(result.convert('RGB'), dtype=np.float64) / 255.0)
     target = rgb2lab(garment_pixels(garment).reshape(-1, 1, 3) / 255.0).reshape(-1, 3)
 
-    source_median, source_spread = _robust_stats(lab[selected])
+    source_median, source_spread = _robust_stats(lab[confident])
     target_median, target_spread = _robust_stats(target)
 
-    adjusted = lab[selected].copy()
-    adjusted[:, 0] += (target_median[0] - source_median[0]) * strength
+    adjusted = lab.copy()
+    adjusted[..., 0] += target_median[0] - source_median[0]
     for channel in (1, 2):
-        scaled = ((adjusted[:, channel] - source_median[channel])
-                  * (target_spread[channel] / source_spread[channel])
-                  + target_median[channel])
-        adjusted[:, channel] += (scaled - adjusted[:, channel]) * strength
+        adjusted[..., channel] = ((lab[..., channel] - source_median[channel])
+                                  * (target_spread[channel] / source_spread[channel])
+                                  + target_median[channel])
 
-    lab[selected] = adjusted
-    return Image.fromarray(np.clip(lab2rgb(lab) * 255.0, 0, 255).astype('uint8'))
+    # 픽셀마다 '새로 그려진 정도'만큼만 옮긴다. 배경·원래 남은 부분은 0이라 그대로다.
+    blend = (weight * strength)[..., None]
+    corrected = lab + (adjusted - lab) * blend
+    return Image.fromarray(np.clip(lab2rgb(corrected) * 255.0, 0, 255).astype('uint8'))

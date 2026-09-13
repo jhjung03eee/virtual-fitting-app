@@ -163,12 +163,15 @@ DEFAULT_SCHEDULER = 'dpm'
 DEFAULT_STEPS = 8
 DEFAULT_GUIDANCE = 2.5  # 1.0 이하면 CFG가 꺼져 2배 빨라지지만 옷이 무너진다
 
-# 부위별 guidance. 실제 사진 실험에서 상의와 하의가 갈렸다.
+# 부위별 guidance — 한때 하의만 5.0으로 올렸다가 되돌렸다.
 #   상의: 2.5가 최선. 5.0으로 올리면 옷 가장자리가 지저분해지고 프린트가 깨진다.
-#   하의: 2.5에서 **색이 아예 틀렸다** — 네이비 코듀로이가 크림색으로 나왔고
-#         인물 3명 모두 그랬다. 5.0으로 올리니 실제 데님 색이 나왔다.
-# 근거가 하의 한 벌(인물 3명)뿐이므로, 다른 바지에서 이상하면 다시 볼 것.
-DEFAULT_GUIDANCE_BY_TYPE = {'lower': 5.0}
+#   하의: 네이비 코듀로이 한 벌에서 2.5가 크림색으로 나와 5.0으로 올렸었다.
+#         그런데 단색 올리브 퍼티그 팬츠를 입혀보니 5.0에서는 두 인물 모두
+#         **위장무늬처럼 얼룩덜룩**해졌고, 2.5에서는 깨끗한 단색으로 나왔다.
+#         코듀로이는 5.0에서도 워싱 청바지처럼 나와 결국 실패였으므로,
+#         5.0은 한 벌을 살리지도 못하면서 다른 옷을 망가뜨린다.
+# 교훈: 옷 한 벌로 기본값을 정하면 안 된다(docs/PLAN.md 참고).
+DEFAULT_GUIDANCE_BY_TYPE = {}
 
 
 def default_guidance(cloth_type):
@@ -186,7 +189,7 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
     scheduler: 'ddim'(기본) 또는 'dpm'(DPMSolverMultistep, 적은 스텝에서 유리)
     eta: DDIM 확률성. 1.0이면 DDPM에 가깝고 0.0이면 결정적. DPM++에서는 무시된다.
         (repo 기본값이 1.0이라 그대로 둔다)
-    guidance_scale: None이면 부위별 기본값(상의 2.5 / 하의 5.0).
+    guidance_scale: None이면 기본값 2.5 (부위별 예외 없음, 위 주석 참고).
         1.0 이하면 CFG가 꺼져 배치가 절반 -> 약 2배 빠르지만 옷이 무너진다
     composite: 마스크 밖을 원본 사진으로 되돌린다. 아래 주석 참고
     normalize_background: 인물만 오려 흰 배경에 올린 뒤 합성한다(배경 정규화).
@@ -272,7 +275,9 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
         # 마스크 경계에서 피부까지 물들지 않게 한다.
         if result.size != person.size:
             result = result.resize(person.size, Image.LANCZOS)
-        result = match_garment_color(result, mask, garment, strength=color_match)
+        # person 을 넘겨야 마스크 안에서도 새로 그려진 옷만 보정한다.
+        # 안 넘기면 모델이 다시 그린 옷 주변 배경까지 물들어 후광이 생긴다.
+        result = match_garment_color(result, mask, garment, strength=color_match, person=person)
 
     if composite:
         # CatVTON 파이프라인은 latent 전체를 디코딩해 돌려준다. 즉 **마스크 밖도

@@ -278,14 +278,16 @@ def _run_pose(image):
         running_mode=vision.RunningMode.IMAGE,
         output_segmentation_masks=True,
     )
+    import numpy as np
     with vision.PoseLandmarker.create_from_options(options) as landmarker:
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
         result = landmarker.detect(mp_image)
+        # numpy_view()는 mediapipe 내부 버퍼를 가리킨다. landmarker가 닫힌 뒤에 읽으면
+        # 해제된 메모리라 segfault가 난다(photo_check에서 실제로 났다). 안에서 복사한다.
+        mask = None
+        if result.pose_landmarks and getattr(result, 'segmentation_masks', None):
+            mask = np.squeeze(result.segmentation_masks[0].numpy_view()).copy()
 
     if not result.pose_landmarks:
         return None, None
-    mask = None
-    if getattr(result, 'segmentation_masks', None):
-        import numpy as np
-        mask = np.squeeze(result.segmentation_masks[0].numpy_view())
     return result.pose_landmarks[0], mask

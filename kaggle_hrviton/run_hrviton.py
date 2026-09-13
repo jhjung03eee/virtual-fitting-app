@@ -47,8 +47,12 @@ run([sys.executable, '-u', os.path.join(REPO_DIR, 'scripts', 'setup_env.py')])
 sys.path.insert(0, os.path.join(REPO_DIR, 'app'))
 from paths import VENV_PY  # noqa: E402
 
-# 포즈(MediaPipe)·로그(tensorboardX)·체크포인트 다운로드(gdown)는 venv에 없다
-run([VENV_PY, '-m', 'pip', 'install', '-q', 'mediapipe', 'tensorboardX', 'gdown'])
+# 포즈(MediaPipe)·로그(tensorboardX)·체크포인트 다운로드(gdown)는 venv에 없다.
+# numpy 를 같이 고정해야 한다 — v1에서 mediapipe가 numpy 2.x를 끌어와 torch 2.1.2가
+# "Numpy is not available"로 죽었다.
+run([VENV_PY, '-m', 'pip', 'install', '-q', 'mediapipe==0.10.14', 'numpy==1.26.4', 'tensorboardX', 'gdown'])
+run([VENV_PY, '-c', 'import numpy, torch, mediapipe; print("numpy", numpy.__version__, "torch", torch.__version__); '
+     'torch.from_numpy(numpy.zeros(1))'])
 
 # HR-VITON 은 2022년 코드라 최신 라이브러리와 두 군데 안 맞는다.
 #  - np.float / np.int 는 numpy 1.24 에서 제거됨

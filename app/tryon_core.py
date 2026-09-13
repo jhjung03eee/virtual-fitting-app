@@ -159,8 +159,17 @@ def _sync():
 # 데모 카디건 한 벌로만 보고 CFG를 껐던 것이 잘못이었다. CFG는 켜 둔다.
 #
 # 스텝도 4로 줄이면 사진 프린트가 작은 얼룩으로 쪼그라든다. 8스텝은 유지된다.
-DEFAULT_SCHEDULER = 'dpm'
-DEFAULT_STEPS = 8
+#
+# ▶ 번복 (2026-09-13): 기본값을 DPM++ 8 -> **DDIM 50(저장소 기본값)** 으로 되돌렸다.
+#   "DPM++ 8은 30·50과 구별 안 됨"은 SSIM과 썸네일로 본 판단이었고, SSIM은 미세 질감을 못 본다.
+#   원본 해상도로 같은 입력·시드를 비교하니(docs/PLAN.md F-7, 데모 8건 + 카톡 6건):
+#     - DPM++ 8: 글자 프린트가 번지고 휘며 색이 탁함, 스누피 프린트 왜곡, 니트 결 없음. 글자 맨투맨 1건은 얼룩 붕괴
+#     - DDIM 30: 글자·프린트·니트 결이 또렷. 단 글자 맨투맨 1건이 짧게 잘림
+#     - DDIM 50: 14건 모두 형태 유지, 가장 또렷
+#   사용자가 "질감이 흐리다"고 지적한 원인이 이 속도 최적화였다. 대가는 시간이다
+#   (P100 한 장 30초 -> 170초, T4 약 19초 -> 약 110초). 빠른 미리보기가 필요하면 DDIM 30.
+DEFAULT_SCHEDULER = 'ddim'
+DEFAULT_STEPS = 50
 DEFAULT_GUIDANCE = 2.5  # 1.0 이하면 CFG가 꺼져 2배 빨라지지만 옷이 무너진다
 
 # 부위별 guidance — 한때 하의만 5.0으로 올렸다가 되돌렸다.
@@ -187,7 +196,7 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS,
 
     person/garment: 파일 경로 또는 PIL.Image
     cloth_type: CLOTH_TYPES 중 하나
-    scheduler: 'ddim'(기본) 또는 'dpm'(DPMSolverMultistep, 적은 스텝에서 유리)
+    scheduler: 'ddim'(기본, 50스텝) 또는 'dpm'(DPMSolverMultistep, 빠르지만 질감이 흐려짐)
     eta: DDIM 확률성. 1.0이면 DDPM에 가깝고 0.0이면 결정적. DPM++에서는 무시된다.
         (repo 기본값이 1.0이라 그대로 둔다)
     guidance_scale: None이면 기본값 2.5 (부위별 예외 없음, 위 주석 참고).

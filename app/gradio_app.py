@@ -176,7 +176,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
         '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다. '
         '옷 영역 마스크는 자동으로 잡습니다 (DensePose + SCHP).\n\n'
         '- 인물은 **정면 전신, 정자세** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 19초 (DPM++ 8스텝)'
+        '- T4 GPU 기준 한 장에 약 110초 (DDIM 50스텝, 질감 우선). 빠르게 보려면 고급 설정에서 스텝을 30으로'
     )
 
     with gr.Row():
@@ -206,12 +206,12 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
 
             with gr.Accordion('고급 설정', open=False):
                 sched_in = gr.Radio(
-                    choices=[('DPM++ (빠름, 기본)', 'dpm'), ('DDIM (원본 설정)', 'ddim')],
+                    choices=[('DDIM (기본, 선명함)', 'ddim'), ('DPM++ (빠르지만 질감이 흐려짐)', 'dpm')],
                     value=DEFAULT_SCHEDULER, label='샘플러',
                 )
                 steps_in = gr.Slider(
                     4, 50, value=DEFAULT_STEPS, step=1,
-                    label='추론 스텝 (DPM++는 4~8이면 충분. DDIM은 30 권장)',
+                    label='추론 스텝 (DDIM 50 기본, 30이면 약 1.7배 빠름. DPM++는 8)',
                 )
                 guidance_in = gr.Slider(
                     1.0, 7.5, value=DEFAULT_GUIDANCE, step=0.1,

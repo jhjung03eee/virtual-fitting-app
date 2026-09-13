@@ -55,8 +55,21 @@ def run(*args):
 
 subprocess.call('apt-get -qq install -y fonts-nanum > /dev/null 2>&1', shell=True)
 run(os.path.join(REPO_DIR, 'scripts', 'setup_env.py'))
-run(os.path.join(REPO_DIR, 'scripts', 'real_person_check.py'),
-    '--persons', persons_dir, '--garments', garments_dir, '--seeds', SEEDS)
+CHECK = os.path.join(REPO_DIR, 'scripts', 'real_person_check.py')
+BASE = ['--persons', persons_dir, '--garments', garments_dir]
+
+# 1차 결과(v1)에서 나온 문제를 하나씩 가른다.
+# (1) 반팔: 사진에서 지운 카드지갑이 손에 들린 채 되살아났다. 흔적까지 지운 사진으로 다시.
+run(CHECK, *BASE, '--only', 'tee', '--seeds', SEEDS, '--tag', 'clean')
+# (2) 바지: 위장무늬처럼 얼룩졌다. 하의 기본값 guidance 5.0은 코듀로이 한 벌로 정한 값이라
+#     이 바지에서도 맞는지 모른다. 2.5와 비교하고, 색 보정 유무도 함께 본다.
+run(CHECK, *BASE, '--only', 'pants', '--seeds', '42,123', '--guidance', '2.5', '--tag', 'g2.5')
+run(CHECK, *BASE, '--only', 'pants', '--seeds', '42,123', '--guidance', '2.5',
+    '--color-match', '1.0', '--tag', 'g2.5_color')
+run(CHECK, *BASE, '--only', 'pants', '--seeds', '42,123', '--guidance', '5.0',
+    '--color-match', '1.0', '--tag', 'g5_color')
+# (3) 셔츠: 형태는 좋은데 원본(스틸 블루)보다 연하다. 색 보정이 맞춰주는지.
+run(CHECK, *BASE, '--only', 'shirt', '--seeds', '42,123', '--color-match', '1.0', '--tag', 'color')
 
 print('\n=== /kaggle/working 결과물 ===', flush=True)
 for root, _dirs, files in os.walk('/kaggle/working'):

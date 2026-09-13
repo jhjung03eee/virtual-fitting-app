@@ -77,10 +77,20 @@ def main():
     ap.add_argument('--seed', type=int, default=42)
     ap.add_argument('--seeds', default=None,
                     help='쉼표로 구분한 시드 목록 (예: 42,123,7). 생략하면 --seed 하나')
+    ap.add_argument('--guidance', type=float, default=None,
+                    help='생략하면 부위별 기본값(상의 2.5 / 하의 5.0)')
+    ap.add_argument('--color-match', type=float, default=0.0,
+                    help='0~1. 생성된 옷 색조를 원본 옷 사진에 맞춘다')
+    ap.add_argument('--only', default=None,
+                    help='파일명에 이 문자열이 든 옷만 돌린다 (예: pants)')
+    ap.add_argument('--tag', default='',
+                    help='결과 파일명에 붙일 꼬리표. 설정을 바꿔 여러 번 돌릴 때 덮어쓰지 않게')
     args = ap.parse_args()
 
     persons = find_images(args.persons)
     garments = find_garments(args.garments)
+    if args.only:
+        garments = [g for g in garments if args.only in os.path.basename(g)]
     if not persons:
         sys.exit(f'인물 사진을 찾지 못했습니다: {args.persons}')
     if not garments:
@@ -110,15 +120,17 @@ def main():
             for seed in seeds:
                 result, mask_vis, timing = try_on(
                     person=person, garment=garment, cloth_type=cloth_type,
-                    steps=args.steps, seed=seed, return_timing=True)
+                    steps=args.steps, seed=seed, return_timing=True,
+                    guidance_scale=args.guidance, color_match=args.color_match)
 
-                stem = f'{person_name}__{garment_name}_s{seed}'
+                tag = f'_{args.tag}' if args.tag else ''
+                stem = f'{person_name}__{garment_name}{tag}_s{seed}'
                 out_path = os.path.join(OUT_DIR, f'{stem}.png')
                 mask_path = os.path.join(OUT_DIR, f'{stem}_mask.png')
                 result.save(out_path)
                 mask_vis.save(mask_path)
 
-                label = f'{garment_name} s{seed}'
+                label = f'{garment_name}{tag} s{seed}'
                 results.append((label, out_path, timing['total_s'], None))
                 if seed == seeds[0]:
                     # 마스크는 시드와 무관하므로 첫 시드 것만 붙인다
@@ -135,13 +147,16 @@ def main():
                     'platform': PLATFORM, 'gpu': GPU_NAME,
                 })
 
-        caption = f'{person_name} · {args.steps}스텝 · 시드 {seeds} · {PLATFORM} {GPU_NAME}'
+        guidance = '부위별 기본' if args.guidance is None else f'g{args.guidance:g}'
+        caption = (f'{person_name} · {args.steps}스텝 · {guidance} · 색보정 {args.color_match:g}'
+                   f' · 시드 {seeds} · {PLATFORM} {GPU_NAME}')
+        suffix = f'_{args.tag}' if args.tag else ''
         grid = build_grid(person, results,
-                          os.path.join(OUT_DIR, f'compare_{person_name}.png'),
+                          os.path.join(OUT_DIR, f'compare_{person_name}{suffix}.png'),
                           caption=caption)
         # 마스크는 따로 붙인다. 결과가 이상할 때 원인이 마스크인지 봐야 한다.
         mask_grid = build_grid(person, mask_results,
-                               os.path.join(OUT_DIR, f'mask_{person_name}.png'),
+                               os.path.join(OUT_DIR, f'mask_{person_name}{suffix}.png'),
                                caption=f'{caption} — 자동 생성 마스크')
         print(f'  결과 -> {grid}\n  마스크 -> {mask_grid}\n', flush=True)
 

@@ -161,5 +161,65 @@ class TestNoHaloInsideLooseMask(unittest.TestCase):
         self.assertGreater(np.abs(out[background_in_mask] - before[background_in_mask]).max(), 3)
 
 
+class TestLowChromaAndSkin(unittest.TestCase):
+    """카키 반팔에서 터진 두 가지.
+
+    1. a·b 산포까지 맞추다가 저채도 옷의 작은 노이즈가 얼룩으로 증폭됐다.
+    2. 새로 그려진 팔(피부)까지 옷 색으로 보정해 팔이 주황색이 됐다.
+    """
+
+    def setUp(self):
+        try:
+            import skimage  # noqa: F401
+        except ImportError:
+            self.skipTest('skimage 없음')
+        self.size = 80
+        self.person = Image.new('RGB', (self.size, self.size), (30, 30, 30))  # 원본: 검은 옷
+        self.mask = Image.new('L', (self.size, self.size), 255)
+        self.garment = make_garment('white', (110, 108, 82))                  # 카키
+
+    def test_noise_is_not_amplified(self):
+        rng = np.random.default_rng(0)
+        base = np.full((self.size, self.size, 3), (125, 122, 100), dtype=float)
+        noisy = np.clip(base + rng.normal(0, 3, base.shape), 0, 255).astype(np.uint8)
+        result = Image.fromarray(noisy)
+        out = np.asarray(match_garment_color(
+            result, self.mask, self.garment, strength=1.0, person=self.person)).astype(float)
+        before_std = np.asarray(result, dtype=float).std(axis=(0, 1))
+        after_std = out.std(axis=(0, 1))
+        self.assertTrue((after_std < before_std * 1.5 + 1).all(),
+                        f'노이즈가 증폭됐다: {before_std} -> {after_std}')
+
+    def test_skin_is_untouched(self):
+        array = np.full((self.size, self.size, 3), (125, 122, 100), dtype=np.uint8)
+        array[:, :20] = (205, 150, 120)                                       # 새로 그려진 팔
+        result = Image.fromarray(array)
+        out = np.asarray(match_garment_color(
+            result, self.mask, self.garment, strength=1.0, person=self.person)).astype(int)
+        drift = np.abs(out[:, :20] - array[:, :20].astype(int)).max()
+        self.assertLessEqual(drift, 2, f'피부가 {drift}만큼 물들었다')
+        self.assertGreater(np.abs(out[:, 30:] - array[:, 30:].astype(int)).mean(), 3,
+                           '옷 부분은 보정돼야 한다')
+
+    def test_khaki_garment_is_not_mistaken_for_skin(self):
+        """카키는 YCbCr 피부 범위에 걸칠 수 있다. 목표 색과 가까우면 피부가 아니다."""
+        from color_match import skin_pixels
+        from skimage.color import rgb2lab
+        rgb = np.full((4, 4, 3), (160, 130, 95), dtype=float)                # 베이지 옷
+        target = rgb2lab(np.array([[[160, 130, 95]]]) / 255.0)[0, 0]
+        self.assertTrue(skin_pixels(rgb).all(), '전제: 목표 색 없이 보면 피부로 걸린다')
+        self.assertFalse(skin_pixels(rgb, target, rgb2lab(rgb / 255.0)).any())
+
+    def test_shift_is_capped(self):
+        result = Image.new('RGB', (self.size, self.size), (240, 240, 240))  # 흰색으로 그림
+        garment = make_garment('white', (20, 20, 60))                        # 진한 남색 옷
+        out = np.asarray(match_garment_color(
+            result, self.mask, garment, strength=1.0, person=self.person))
+        from skimage.color import rgb2lab
+        l_before = rgb2lab(np.asarray(result) / 255.0)[..., 0].mean()
+        l_after = rgb2lab(out / 255.0)[..., 0].mean()
+        self.assertLessEqual(l_before - l_after, 25.5)
+
+
 if __name__ == '__main__':
     unittest.main()

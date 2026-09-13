@@ -35,7 +35,7 @@ CatVTON 저장소에 **cp39 전용으로 컴파일된 detectron2 `.so`** 가 들
 깨진 파일을 커밋한 적 있다.
 ```sh
 python scripts/check_syntax.py          # 추적 중인 .py 전체
-python -m unittest discover -s tests    # 117건
+python -m unittest discover -s tests
 ```
 
 **3. 저작권·개인정보 파일은 커밋하지 않는다.**
@@ -77,6 +77,8 @@ DPM++ 8은 글자 프린트가 번지고 니트 결이 사라져 있었다(`docs
 **품질 판단은 반드시 옷 영역을 원본 해상도로 잘라서 눈으로 본다.**
 | `torch.compile` / `channels_last` | ❌ 효과 없음 (P100은 Triton 미지원, T4는 libcuda 문제) |
 | 모델 교체 (IDM-VTON) | ❌ **기각.** 더 낫긴 하나 29GB·SDXL이라 T4에 못 들어갈 수 있음. `docs/PLAN.md` F절 |
+| 변형+GAN (HR-VITON) | ❌ **기각.** 70배 빠르지만 실사진에서 색·소매·배경 붕괴. `docs/PLAN.md` F-8 |
+| 하이브리드 (HR-VITON 변형 초안 + CatVTON) | ❌ **기본값으로는 안 씀.** 0.7은 글자 충실도가 좋지만 원래 옷 소매가 남음, 0.9는 단독과 같은 품질인데 HR-VITON 전처리·모델이 추가로 필요. `try_on(warp=)`은 실험용으로만 남김. F-9 |
 
 **결과를 좌우하는 건 시드다.** 같은 설정에서 시드만 바꾸면 프린트가 나왔다 말았다 한다.
 그래서 "설정 A에서 안 나온다"는 판단은 **시드 여러 개로 확인하기 전까지 하면 안 된다.**
@@ -117,17 +119,7 @@ python scripts/prepare_person.py data/person -o data/person/prepared
 ```
 `compare_grid.py` 는 torch를 안 쓴다. Kaggle 결과로 비교 이미지를 다시 만들 때 쓴다.
 
-## 구조
+## 사이즈 파트
 
-```
-app/tryon_core.py     추론 단일 소스 (Gradio·벤치마크가 공유)
-app/size_fit.py       여유분 계산 → S/M/L 추천 (순수 계산, GPU 불필요)
-app/body_profile.py   사용자 입력 신체 치수. 둘레↔단면 변환
-app/chart_extract.py  치수표 이미지 추출 결과 검증층 (네트워크 안 씀)
-app/gradio_app.py     웹 UI
-scripts/              벤치마크·비교·전처리
-kaggle_*/             Kaggle 커널 진입점
-```
-
-사이즈 파트는 **사용자가 직접 치수를 입력**한다. 사진으로 몸을 재는
+추론은 `app/tryon_core.py` 한 곳에만 있다(Gradio·벤치마크가 공유). 사이즈 파트는 **사용자가 직접 치수를 입력**한다. 사진으로 몸을 재는
 `app/body_measure.py` 는 보조 기능으로만 남아 있다(정확도를 신뢰할 수 없음).

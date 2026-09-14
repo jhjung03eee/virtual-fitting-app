@@ -4,7 +4,8 @@ F-10에서 P100 장당 177초·메모리 15.5GB였다. 로그상 원인 후보:
   1. P100은 bfloat16을 흉내만 내는데 FASHN이 is_bf16_supported()=True 를 보고 bfloat16을 골랐다
   2. 포즈 인식(DWPose, onnxruntime)이 CUDA 연결 실패로 CPU에서 돌았다
 설정별로 같은 입력 한 장을 돌려 시간·최대 메모리·결과 이미지를 남긴다.
-GPU 종류(P100/T4)는 API로 못 바꾸므로 커널 설정에서 바꿔 두 번 실행한다.
+GPU 종류는 `kaggle kernels push --accelerator NvidiaTeslaT4` 처럼 올릴 때 고른다.
+50스텝(현재 기본값, F-11)은 P100에서 30스텝으로 추정만 했으므로 여기서 직접 잰다.
 """
 import os
 import subprocess
@@ -89,6 +90,8 @@ CONFIGS = [
     ('fp16_30', torch.float16, 30),
     ('fp32_20', torch.float32, 20),
     ('fp16_20', torch.float16, 20),
+    ('fp32_50', torch.float32, 50),
+    ('fp16_50', torch.float16, 50),
 ]
 
 tag = gpu.split()[-1].replace('-', '').lower()   # 예: p10016gb, t4

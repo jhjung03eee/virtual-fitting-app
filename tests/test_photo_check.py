@@ -78,11 +78,17 @@ class TestPhotoCheck(unittest.TestCase):
         check = check_photo(image(), [])
         self.assertFalse(check.ok)
 
-    def test_small_person_warns_but_allows(self):
-        small = landmarks(nose=(750, 1000), left_ankle=(800, 1650), right_ankle=(700, 1650))
+    def test_small_person_must_retake(self):
+        """멀리서 찍은 전신(카톡 원본 0.54)은 바지가 안 입혀졌다. 합성 전에 다시 찍게 한다."""
+        small = landmarks(nose=(750, 580), left_ankle=(800, 1660), right_ankle=(700, 1660))  # 0.54
         check = check_photo(image(), small)
-        self.assertTrue(check.ok)
+        self.assertFalse(check.ok)
         self.assertIn('가까이', check.message())
+
+    def test_person_filling_frame_passes(self):
+        """카톡 크롭본(0.78) 수준이면 통과."""
+        close = landmarks(nose=(750, 200), left_ankle=(800, 1760), right_ankle=(700, 1760))  # 0.78
+        self.assertTrue(check_photo(image(), close).ok)
 
     def test_arm_touching_body_warns(self):
         mask = np.zeros((H, W), dtype=np.float32)

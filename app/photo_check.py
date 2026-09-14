@@ -20,8 +20,11 @@ from body_measure import POSE_LANDMARKS
 
 MIN_VISIBILITY = 0.5
 MIN_SHORT_SIDE = 720          # 이보다 작으면 줌 합성의 이득이 없다
-MIN_BODY_PX = 900             # 머리~발목 픽셀 높이. 작으면 옷이 뭉개진다
-MIN_BODY_FRACTION = 0.45      # 화면 세로 중 인물 비율
+MIN_BODY_PX = 600             # 머리~발목 픽셀 높이. 합성 모델 입력(세로 864~1024px)보다 한참 작으면 뭉개진다
+# 화면 세로 중 인물(코~발목) 비율. 미달이면 다시 찍게 한다(docs/PLAN.md F-12).
+# FASHN이 사진을 줄여 넣으면서 멀리 찍힌 사람은 다리가 너무 가늘어져 바지를 못 입혔다.
+# 실측: 카톡 원본 0.54 바지 실패 / 카톡 크롭본 0.78·데모 여성 0.88 바지 성공. 0.65는 초기값.
+MIN_BODY_FRACTION = 0.65
 MIN_FRONTAL_RATIO = 0.45      # 어깨 폭 / 몸통 길이. 옆으로 돌면 줄어든다
 ARMS_DOWN_MARGIN = 0.15       # 손목이 엉덩이보다 몸통 길이의 이만큼 위까지는 '내림'
 MAX_ARM_SPREAD = 0.5          # 손목-엉덩이 가로 거리 / 몸통 길이. 정자세 0.25, 팔 벌림 0.67~0.70
@@ -106,7 +109,7 @@ def check_photo(image, landmarks=None, seg_mask=None) -> PhotoCheck:
         check.metrics['body_px'] = round(float(body_px), 1)
         check.metrics['body_fraction'] = round(float(body_px / height), 3)
         if body_px / height < MIN_BODY_FRACTION:
-            check.warnings.append('조금 더 가까이서 찍어주세요. 사람이 화면에 비해 작아요.')
+            check.errors.append('더 가까이서 찍어주세요. 머리부터 발끝까지 화면을 꽉 채워야 옷이 정확하게 입혀져요.')
         elif body_px < MIN_BODY_PX:
             check.warnings.append('사진 해상도가 낮아 옷 질감이 흐리게 나올 수 있어요.')
 

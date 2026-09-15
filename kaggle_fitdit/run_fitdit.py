@@ -24,22 +24,24 @@ WEIGHTS = os.path.join(WORK, 'weights')
 INPUTS = os.path.join(WORK, 'inputs')
 OUT = '/kaggle/working/fitdit'
 os.environ.setdefault('HF_HOME', os.path.join(WORK, 'hf'))   # CLIP 인코더 캐시. 워커도 같은 경로를 본다
-FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed', 'resolution',
+FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed', 'resolution', 'mask',
           'gpu', 'offload', 'seconds', 'broken', 'file']
 CATEGORY = {'tops': 'Upper-body', 'bottoms': 'Lower-body', 'dresses': 'Dresses'}
 OFFLOAD = True   # T4 16GB + 1152x1536. 메모리가 넉넉한 GPU(A100 등)에서는 False
 
-# (묶음, 인물, 옷, category, 스텝, guidance, 시드, 해상도) — FASHN F-14와 같은 인물·옷·시드
-# 스텝은 저자 UI 최대치 30(기본 20), guidance는 저자 기본 2. 품질 우선이라 해상도는 저자 기본 1152x1536.
+# 마스크 방식
+#   'rect'   : 저자 기본. 몸과 무관한 큰 직사각형(어깨 바깥~양팔~엉덩이). 모델이 원본 옷 모양대로 채워서
+#              오버핏 옷은 오버핏으로 나온다(F-15 v2~v4 전부 이 방식).
+#   'bodyN'  : 직사각형 ∩ (사람 윤곽을 N px 넓힌 영역). 옷이 몸 바깥 배경으로 퍼질 자리를 없애 몸에 맞는 핏(정핏)을 유도한다.
+#              N은 인물 사진 가로 768px 기준(사진 크기에 비례해 조정). 세로 범위(기장)는 직사각형 그대로.
+# (묶음, 인물, 옷, category, 스텝, guidance, 시드, 해상도, 마스크) — F-15 시드 42와 같은 조건에 마스크만 바꾼다
 JOBS = []
 for person, garment, category in (('kakao_front_upper', 'sweatshirt_text', 'tops'),
                                   ('kakao_front_upper', 'tee_orangutan', 'tops'),
                                   ('kakao_front_upper', 'shirt_blue', 'tops'),
                                   ('demo_person1_full', 'pants_corduroy', 'bottoms')):
-    # v2에서 시드 123 4장, v3에서 시드 42 중 오랑우탄·코듀로이 2장 성공(data/samples/results/fitdit_v2, _v3).
-    # v4는 v3 GPU0에서 못 만든 시드 42 두 장만 돌린다
-    if garment in ('sweatshirt_text', 'shirt_blue'):
-        JOBS.append(('E', person, garment, category, 30, 2.0, 42, '1152x1536'))
+    for mask_mode in ('body8', 'body24'):
+        JOBS.append(('F', person, garment, category, 30, 2.0, 42, '1152x1536', mask_mode))
 
 
 def run(cmd):
@@ -50,8 +52,32 @@ def run(cmd):
 
 
 def job_name(job):
-    group, person, garment, _category, steps, guidance, seed, resolution = job
-    return f'{group}__{person}__{garment}__st{steps}_g{guidance:g}_s{seed}_{resolution}.png'
+    group, person, garment, _category, steps, guidance, seed, resolution, mask_mode = job
+    return f'{group}__{person}__{garment}__st{steps}_g{guidance:g}_s{seed}_{resolution}_{mask_mode}.png'
+
+
+def fit_mask(generator, rect_mask, person_path, margin_768):
+    """저자 직사각형 마스크를 사람 윤곽(+여유)으로 자른다. 반환 형식은 generate_mask와 같다(process는 layers[0]의 alpha만 쓴다)."""
+    import cv2
+    import numpy as np
+    from PIL import Image
+    from gradio_sd3 import resize_image
+
+    person = Image.open(person_path)
+    # 저자 generate_mask와 같은 크기(짧은 변 768)로 부위 인식. 라벨 0 = 배경
+    parse, _ = generator.parsing_model(resize_image(person))
+    body = (np.array(parse.resize(person.size, Image.NEAREST)) != 0).astype(np.uint8)
+    margin = max(1, round(margin_768 * person.size[0] / 768))
+    body = cv2.dilate(body, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * margin + 1, 2 * margin + 1)))
+
+    rect_alpha = rect_mask['layers'][0][:, :, 3]
+    alpha = np.where((rect_alpha > 0) & (body > 0), 255, 0).astype(np.uint8)
+    gray = np.full_like(alpha, 128)
+    layer = np.stack([gray, gray, gray, alpha], axis=2)
+    base = np.array(person.convert('RGB'))
+    composite = np.where(alpha[..., None] > 0, 128, base).astype(np.uint8)
+    return {'background': rect_mask['background'], 'layers': [layer],
+            'composite': np.concatenate([composite, np.full_like(alpha, 255)[..., None]], axis=2)}
 
 
 def worker(index):
@@ -92,20 +118,24 @@ def worker(index):
         writer = csv.DictWriter(log, fieldnames=FIELDS)
         writer.writeheader()
         for done, job in enumerate(jobs, 1):
-            group, person_name, garment_name, category, steps, guidance, seed, resolution = job
+            group, person_name, garment_name, category, steps, guidance, seed, resolution, mask_mode = job
             person_path = spec['persons'][person_name]
             garment_path = spec['garments'][garment_name]
             name = job_name(job)
-            row = dict(zip(FIELDS, [group, person_name, garment_name, category, steps, guidance, seed, resolution, index]))
+            row = dict(zip(FIELDS, [group, person_name, garment_name, category, steps, guidance, seed, resolution,
+                                    mask_mode, index]))
             start = time.time()
             try:
-                key = (person_name, category)
+                key = (person_name, category, mask_mode)
                 if key not in masks:
-                    # 저자 UI의 Step1(마스크) — 사람·부위가 같으면 시드가 달라도 같다
+                    # 저자 UI의 Step1(마스크) — 사람·부위·방식이 같으면 시드가 달라도 같다
                     mask, pose = generator.generate_mask(person_path, CATEGORY[category], 0, 0, 0, 0)
+                    if mask_mode.startswith('body'):
+                        mask = fit_mask(generator, mask, person_path, int(mask_mode[4:]))
                     masks[key] = (mask, np.array(pose))
                     Image.fromarray(mask['composite']).convert('RGB').save(
-                        os.path.join(OUT, f'_mask__{person_name}__{category}.png'))
+                        os.path.join(OUT, f'_mask__{person_name}__{category}__{mask_mode}.png'))
+                    start = time.time()
                 mask, pose = masks[key]
                 for attempt in (1, 2):
                     try:

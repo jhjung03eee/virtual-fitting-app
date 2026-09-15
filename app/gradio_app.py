@@ -1,7 +1,8 @@
-"""가상 피팅 웹 데모.
+"""가상 피팅 웹 데모. 합성 엔진은 FASHN VTON v1.5 (app/fashn_core.py).
 
-Python 3.9 venv에서 실행:
-    MPLBACKEND=Agg /content/venv39/bin/python app/gradio_app.py
+기본 파이썬(3.10 이상)에서 실행 — CatVTON용 3.9 venv가 아니다:
+    python app/gradio_app.py
+FASHN 저장소·가중치 위치는 app/paths.py (FASHN_REPO, FASHN_WEIGHTS 환경변수로 바꿀 수 있음).
 """
 import glob
 import json
@@ -39,8 +40,8 @@ _gcu._json_schema_to_python_type = _safe_json_schema_to_python_type
 _gcu.get_type = _safe_get_type
 # -------------------------------------------------------------------------
 
-from tryon_core import (try_on, load_models, REPO_DIR,
-                        DEFAULT_STEPS, DEFAULT_SCHEDULER, DEFAULT_GUIDANCE)
+from fashn_core import (try_on, load_models, FASHN_REPO,
+                        DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
 from size_fit import SizeChart, recommend
 
@@ -132,51 +133,48 @@ def size_advice(chart_file, height, shoulder, chest, waist, hip) -> str:
     return '\n'.join(lines)
 
 
-def run(person, garment, cloth_label, scheduler, steps, guidance_scale, seed,
-        normalize_background, chart_file, height, shoulder, chest, waist, hip):
+GARMENT_PHOTO_LABELS = {
+    '상품 사진 (옷만 펴 놓고 찍음)': 'flat-lay',
+    '착용 사진 (사람이 입고 찍음)': 'model',
+}
+
+
+def run(person, garment, cloth_label, garment_photo_label, steps, guidance_scale, seed,
+        chart_file, height, shoulder, chest, waist, hip):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
 
     advice = size_advice(chart_file, height, shoulder, chest, waist, hip)
 
-    result, mask_vis = try_on(
+    result, timing = try_on(
         person=person,
         garment=garment,
         cloth_type=CLOTH_LABELS[cloth_label],
+        garment_photo_type=GARMENT_PHOTO_LABELS[garment_photo_label],
         steps=int(steps),
         guidance_scale=float(guidance_scale),
         seed=int(seed),
-        scheduler=scheduler,
-        normalize_background=bool(normalize_background),
+        return_timing=True,
     )
-    return result, advice, mask_vis
+    info = f"합성 {timing['total_s']:.0f}초 · 시드 {timing['seed']} · {timing['dtype']}"
+    return result, advice, info
 
 
 def _examples():
-    """저장소 데모 이미지로 예시 조합을 만든다. 없으면 빈 리스트."""
-    persons = sorted(glob.glob(os.path.join(REPO_DIR, 'resource/demo/example/person/men/*')))
-    uppers = sorted(glob.glob(os.path.join(REPO_DIR, 'resource/demo/example/condition/upper/*')))
-    overalls = sorted(glob.glob(os.path.join(REPO_DIR, 'resource/demo/example/condition/overall/*')))
-    if not persons:
+    """FASHN 저장소 예시 이미지로 예시 조합을 만든다. 없으면 빈 리스트."""
+    person = glob.glob(os.path.join(FASHN_REPO, 'examples/data/model.*'))
+    garment = glob.glob(os.path.join(FASHN_REPO, 'examples/data/garment.*'))
+    if not person or not garment:
         return []
-
-    rows = []
-    if uppers:
-        rows.append([persons[0], uppers[0], '상의'])
-    if overalls:
-        rows.append([persons[0], overalls[0], '하의'])
-    if len(persons) > 1 and uppers:
-        rows.append([persons[1], uppers[1 % len(uppers)], '상의'])
-    return rows
+    return [[person[0], garment[0], '상의', '착용 사진 (사람이 입고 찍음)']]
 
 
 with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
     gr.Markdown(
         '# 가상 피팅 데모\n'
-        '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다. '
-        '옷 영역 마스크는 자동으로 잡습니다 (DensePose + SCHP).\n\n'
-        '- 인물은 **정면 전신, 정자세** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 110초 (DDIM 50스텝, 질감 우선). 빠르게 보려면 고급 설정에서 스텝을 30으로'
+        '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다 (FASHN VTON v1.5).\n\n'
+        '- 인물은 **정면, 머리부터 발끝까지 화면을 꽉 채운** 사진일수록 결과가 좋습니다\n'
+        '- T4 GPU 기준 한 장에 약 2분 (50스텝, 품질 우선). 빠르게 보려면 고급 설정에서 스텝을 30으로'
     )
 
     with gr.Row():
@@ -187,6 +185,11 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 choices=list(CLOTH_LABELS.keys()),
                 value='상의',
                 label='옷 종류',
+            )
+            garment_photo_in = gr.Radio(
+                choices=list(GARMENT_PHOTO_LABELS.keys()),
+                value='상품 사진 (옷만 펴 놓고 찍음)',
+                label='옷 사진 종류',
             )
             with gr.Accordion('내 신체 치수 (사이즈 추천용)', open=True):
                 gr.Markdown(
@@ -205,50 +208,40 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 )
 
             with gr.Accordion('고급 설정', open=False):
-                sched_in = gr.Radio(
-                    choices=[('DDIM (기본, 선명함)', 'ddim'), ('DPM++ (빠르지만 질감이 흐려짐)', 'dpm')],
-                    value=DEFAULT_SCHEDULER, label='샘플러',
-                )
                 steps_in = gr.Slider(
-                    4, 50, value=DEFAULT_STEPS, step=1,
-                    label='추론 스텝 (DDIM 50 기본, 30이면 약 1.7배 빠름. DPM++는 8)',
+                    20, 50, value=DEFAULT_STEPS, step=1,
+                    label='추론 스텝 (50 기본, 30이면 약 1.7배 빠름)',
                 )
                 guidance_in = gr.Slider(
-                    1.0, 7.5, value=DEFAULT_GUIDANCE, step=0.1,
-                    label='guidance scale (1.0이면 2배 빨라지지만 옷이 무너진다. 그대로 둘 것)',
+                    1.0, 4.0, value=DEFAULT_GUIDANCE, step=0.1,
+                    label='guidance scale (2.5 기본. 낮추면 글자 프린트가 휜다)',
                 )
-                seed_in = gr.Number(value=42, precision=0, label='시드 (-1이면 매번 랜덤)')
-                bg_in = gr.Checkbox(
-                    value=True,
-                    label='배경 정규화 (인물만 오려 흰 배경에서 합성)',
-                    info='학습 데이터가 흰 배경이라 복잡한 배경 사진의 성공률이 올라간다. '
-                         '원래 배경은 결과에 그대로 돌아온다.',
-                )
+                seed_in = gr.Number(value=DEFAULT_SEED, precision=0,
+                                    label='시드 (-1이면 매번 랜덤. 결과가 어색하면 바꿔서 다시)')
             run_btn = gr.Button('피팅 해보기', variant='primary')
 
         with gr.Column():
             result_out = gr.Image(label='합성 결과', height=520)
+            info_out = gr.Markdown()
             size_out = gr.Markdown(label='사이즈 추천')
-            with gr.Accordion('자동 생성된 마스크 (결과가 이상할 때 확인용)', open=False):
-                mask_out = gr.Image(label='마스크', height=400)
 
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
 
     run_btn.click(
         fn=run,
-        inputs=[person_in, garment_in, cloth_in, sched_in, steps_in, guidance_in, seed_in,
-                bg_in, chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
-        outputs=[result_out, size_out, mask_out],
+        inputs=[person_in, garment_in, cloth_in, garment_photo_in, steps_in, guidance_in, seed_in,
+                chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
+        outputs=[result_out, size_out, info_out],
     )
 
     examples = _examples()
     if examples:
-        gr.Examples(examples=examples, inputs=[person_in, garment_in, cloth_in], label='예시')
+        gr.Examples(examples=examples, inputs=[person_in, garment_in, cloth_in, garment_photo_in], label='예시')
 
 
 if __name__ == '__main__':
-    print('모델 로딩 중... (최초 1회, 약 40초)', flush=True)
+    print('모델 로딩 중... (최초 1회)', flush=True)
     load_models()
     print('로딩 완료. Gradio 실행합니다.', flush=True)
     # show_api=False: API 스키마 생성 경로(gradio_client)가 pydantic 버전에 따라 터지는 걸 회피

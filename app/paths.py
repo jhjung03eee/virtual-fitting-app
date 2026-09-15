@@ -38,6 +38,9 @@ VENV = os.environ.get('VFA_VENV', _default_venv)
 VENV_PY = os.path.join(VENV, 'bin', 'python')
 OUT_ROOT = os.environ.get('VFA_OUT', _default_out)
 CATVTON_REPO = os.environ.get('CATVTON_REPO', os.path.join(SCRATCH, 'CatVTON'))
+# FASHN VTON v1.5 (앱 주력 엔진, app/fashn_core.py). CatVTON venv와 달리 기본 파이썬(3.10+)에서 돈다
+FASHN_REPO = os.environ.get('FASHN_REPO', os.path.join(SCRATCH, 'fashn-vton-1.5'))
+FASHN_WEIGHTS = os.environ.get('FASHN_WEIGHTS', os.path.join(SCRATCH, 'fashn-weights'))
 
 PLATFORM = 'kaggle' if IS_KAGGLE else ('colab' if IS_COLAB else 'local')
 

@@ -15,6 +15,10 @@ GPU는 **Kaggle만** 쓴다(상시 서버 없음, 시연 때 Gradio 공개 링�
 합성 엔진은 `app/tryon_core.py` 한 곳이라 나중에 교체할 수 있게 둔다.
 구현 순서는 `docs/PLAN.md` "앱 방향 결정" 절에 있다.
 
+**합성 엔진 교체 (2026-09-15): 앱은 FASHN VTON v1.5 (`app/fashn_core.py`).** CatVTON보다 색·실루엣·사진 프린트가 낫다
+(`docs/PLAN.md` F-10~F-14). 기본값 fp16·50스텝·guidance 2.5. FitDiT도 비교했으나 보류(F-15·F-16).
+`app/tryon_core.py`(CatVTON)는 벤치마크·과거 실험 재현용으로만 남는다. 아래 "3.9 venv"·"현재 기본값" 절은 **CatVTON 기준**이다.
+
 **사이즈별 착용 이미지는 만들지 않는다 (2026-09-14 결정).** S/M/L마다 핏이 다르게 보이는 이미지를
 생성하는 기능은 현재 합성 모델로 정확하게 표현할 방법이 없고, 틀린 핏을 보여주면 사이즈 추천의
 신뢰까지 깎는다. 착용 이미지는 한 장(또는 여러 장 중 고르기)만 만들고, 사이즈 차이는
@@ -30,8 +34,8 @@ GPU는 **Kaggle만** 쓴다(상시 서버 없음, 시연 때 Gradio 공개 링�
 
 ## 절대 어기면 안 되는 것
 
-**1. Python 3.9 venv에서만 돌아간다.**
-CatVTON 저장소에 **cp39 전용으로 컴파일된 detectron2 `.so`** 가 들어있다.
+**1. CatVTON(`tryon_core.py`)은 Python 3.9 venv에서만 돌아간다. FASHN(`fashn_core.py`, 앱)은 반대로 3.10 이상.**
+두 엔진은 한 프로세스에서 같이 못 쓴다. CatVTON 저장소에 **cp39 전용으로 컴파일된 detectron2 `.so`** 가 들어있다.
 3.10+ 에서는 import 자체가 안 된다. `scripts/setup_env.py` 가 venv를 만든다.
 "최신 환경으로 어떻게든 돌려보자"는 이미 여러 번 실패했다. 시도하지 말 것.
 

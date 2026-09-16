@@ -161,5 +161,30 @@ class TestGradioWiring(unittest.TestCase):
                       'run() 이 try_on 에 garment_photo_type 을 넘기지 않는다')
 
 
+    def test_photo_check_is_wired(self):
+        """사진 검사(app/photo_check.py)가 앱에 실제로 붙어 있는지.
+
+        ① 사진을 올리면 검사 결과를 보여주고(change 핸들러), ② 합성 전에도 막는다.
+        위젯만 만들고 연결을 잊으면 검사가 아무 일도 안 한다.
+        """
+        source = ast.unparse(self.tree)
+        self.assertIn('from photo_check import check_photo', source,
+                      'gradio_app 이 photo_check 를 가져오지 않는다')
+
+        status = find_function(self.tree, 'photo_status')
+        self.assertIsNotNone(status, 'photo_status() 가 없다 (업로드 시 검사 표시)')
+        self.assertIn('check_photo(', ast.unparse(status))
+
+        handlers = [keyword(call, 'fn') for call in find_click_calls(self.tree)]
+        names = [h.id for h in handlers if isinstance(h, ast.Name)]
+        self.assertIn('photo_status', names,
+                      '인물 사진 업로드에 photo_status 가 연결돼 있지 않다')
+
+        run = find_function(self.tree, 'run')
+        self.assertIn('ignore_photo_check', [a.arg for a in run.args.args])
+        self.assertIn('check_photo(', ast.unparse(run),
+                      'run() 이 합성 전에 사진 검사를 하지 않는다')
+
+
 if __name__ == '__main__':
     unittest.main()

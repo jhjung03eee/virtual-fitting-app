@@ -43,6 +43,7 @@ _gcu.get_type = _safe_get_type
 from fashn_core import (try_on, load_models, FASHN_REPO,
                         DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
+from photo_check import check_photo
 from size_fit import SizeChart, recommend
 
 CLOTH_LABELS = {
@@ -139,10 +140,34 @@ GARMENT_PHOTO_LABELS = {
 }
 
 
-def run(person, garment, cloth_label, garment_photo_label, steps, guidance_scale, seed,
-        chart_file, height, shoulder, chest, waist, hip):
+def photo_status(person):
+    """인물 사진을 올린 순간 자세·거리·역광을 검사해 안내한다 (app/photo_check.py).
+
+    합성 한 장에 2분이 걸리므로, 규칙에 안 맞는 사진은 올리는 순간 알려주는 편이 낫다.
+    포즈 인식(mediapipe)이 없거나 실패하면 photo_check 가 경고만 남기고 넘어간다.
+    """
+    if person is None:
+        return ''
+    check = check_photo(person)
+    if check.ok and not check.warnings:
+        return '✅ ' + check.message()
+    mark = '❌' if check.errors else '⚠️'
+    lines = [f'{mark} ' + line for line in check.message().splitlines()]
+    if check.errors:
+        lines.append('')
+        lines.append('다시 찍기 어렵다면 아래 **사진 검사 무시하고 합성**을 켜고 진행할 수 있어요 (결과가 나빠질 수 있어요).')
+    return '\n\n'.join(lines)
+
+
+def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
+        steps, guidance_scale, seed, chart_file, height, shoulder, chest, waist, hip):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
+
+    if not ignore_photo_check:
+        check = check_photo(person)
+        if not check.ok:
+            raise gr.Error(check.message() + '\n(그대로 해보려면 "사진 검사 무시하고 합성"을 켜세요)')
 
     advice = size_advice(chart_file, height, shoulder, chest, waist, hip)
 
@@ -180,6 +205,9 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
     with gr.Row():
         with gr.Column():
             person_in = gr.Image(label='인물 사진', type='pil', height=400)
+            photo_status_out = gr.Markdown(
+                '인물 사진을 올리면 자세·거리를 먼저 검사해요 '
+                '(정면 · 팔은 몸에서 주먹 하나 · 머리부터 발끝까지 화면 가득).')
             garment_in = gr.Image(label='옷 사진', type='pil', height=400)
             cloth_in = gr.Radio(
                 choices=list(CLOTH_LABELS.keys()),
@@ -208,6 +236,10 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 )
 
             with gr.Accordion('고급 설정', open=False):
+                ignore_check_in = gr.Checkbox(
+                    value=False, label='사진 검사 무시하고 합성',
+                    info='가이드에 안 맞는 사진도 그대로 넣어본다. 결과가 나빠질 수 있다.',
+                )
                 steps_in = gr.Slider(
                     20, 50, value=DEFAULT_STEPS, step=1,
                     label='추론 스텝 (50 기본, 30이면 약 1.7배 빠름)',
@@ -227,10 +259,13 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
 
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
+    # 사진을 올리는 순간 검사한다 (합성 한 장에 2분이라 미리 걸러야 한다)
+    person_in.change(fn=photo_status, inputs=[person_in], outputs=[photo_status_out])
 
     run_btn.click(
         fn=run,
-        inputs=[person_in, garment_in, cloth_in, garment_photo_in, steps_in, guidance_in, seed_in,
+        inputs=[person_in, garment_in, cloth_in, garment_photo_in, ignore_check_in,
+                steps_in, guidance_in, seed_in,
                 chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
         outputs=[result_out, size_out, info_out],
     )

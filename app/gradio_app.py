@@ -279,12 +279,15 @@ if __name__ == '__main__':
     print('모델 로딩 중... (최초 1회)', flush=True)
     load_models()
     print('로딩 완료. Gradio 실행합니다.', flush=True)
-    # show_api=False: API 스키마 생성 경로(gradio_client)가 pydantic 버전에 따라 터지는 걸 회피
+    # show_api=False: API 스키마 생성 경로(gradio_client)가 pydantic 버전에 따라 터지는 걸 회피.
+    #   단 gradio 6에서 이 인자가 없어져 TypeError가 난다(Colab 2026-09-16) → 빼고 다시 띄운다.
     # prevent_thread_lock=True로 먼저 URL을 받아 직접 flush 출력한다.
     # (gradio 자체 print는 flush를 안 해서 파이프로 실행하면 링크가 안 보인다)
-    _, local_url, share_url = demo.queue().launch(
-        share=True, show_error=True, show_api=False, prevent_thread_lock=True
-    )
+    options = dict(share=True, show_error=True, prevent_thread_lock=True)
+    try:
+        _, local_url, share_url = demo.queue().launch(show_api=False, **options)
+    except TypeError:
+        _, local_url, share_url = demo.queue().launch(**options)
     print('=' * 60, flush=True)
     print('로컬 주소 :', local_url, flush=True)
     print('공개 링크 :', share_url or '(생성 실패 — 아래 안내 참고)', flush=True)

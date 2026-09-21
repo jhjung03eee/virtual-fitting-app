@@ -7,7 +7,7 @@ Kaggle T4는 보통 2장이라, GPU마다 워커 프로세스를 하나씩 띄�
 다른 실험에 쓸 때는 맨 위 JOBS만 바꾼다. 한 줄 = 한 장.
 올릴 때: PYTHONUTF8=1 kaggle kernels push -p kaggle_fashn_t4x2 --accelerator NvidiaTeslaT4
 
-지금 JOBS: 스텝 20·25도 쓸 만한가 + 전처리(자세·부위 인식)가 몇 초를 먹는가.
+지금 JOBS: 팀 공통 조건(MODEL_STUDY.md)으로 FASHN 기준선 6장.
 """
 import csv
 import json
@@ -24,16 +24,15 @@ FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed',
           'gpu', 'seconds', 'broken', 'file']
 
 # (묶음, 인물, 옷, category, 스텝, guidance, 시드, dtype, CFG 생략 스텝 수)
-# L: 스텝을 30보다 더 줄일 수 있는가 (20·25). 30스텝 결과는 F-21(J)에 있다. 같은 시드·옷.
-#    동시에 전처리(자세 인식 DWPose + 부위 인식 파싱)가 한 장에서 몇 초를 먹는지 따로 잰다.
-#    합성을 아무리 줄여도 전처리가 크면 거기가 새 병목이 된다.
+# M: 팀 공통 조건(docs/MODEL_STUDY.md)으로 FASHN 기준선을 만든다 — 팀원들이 맡은 모델과 1:1로 비교할 값.
+#    인물 1명(team02) × set2 옷 3벌 × 시드 2개 = 6장. 앱 기본값(fp16·25스텝·guidance 2.5·compile).
 COMPILE = True
 COMPILE_WARMUP = True
-MEASURE_PREPROCESS = True   # 워커가 시작할 때 포즈·파싱 시간을 따로 잰다
+MEASURE_PREPROCESS = False
 JOBS = []
-for garment in ('shirt_blue', 'tee_khaki', 'tee_orangutan'):
-    for steps in (20, 25):
-        JOBS.append(('L', 'team02', garment, 'tops', steps, 2.5, 42, 'fp16', 1))
+for garment, category in (('shirt_blue', 'tops'), ('tee_khaki', 'tops'), ('pants_forest', 'bottoms')):
+    for seed in (42, 123):
+        JOBS.append(('M', 'team02', garment, category, 25, 2.5, seed, 'fp16', 1))
 
 
 def run(cmd):

@@ -20,7 +20,8 @@ from paths import FASHN_REPO, FASHN_WEIGHTS  # noqa: E402
 
 # 기본값 근거:
 #   - guidance 2.5: 글자 프린트가 가장 또렷했다. guidance가 스텝보다 중요(F-11). FASHN 저장소 기본은 1.5.
-#   - 스텝 30: 50스텝과 결과가 사실상 같은데 1.7배 빠르다(F-20, T4 118초 → 68초).
+#   - 스텝 25: 30·50스텝과 결과가 사실상 같다(F-20·F-22). T4에서 50스텝 118초 → 25스텝 + compile 약 50초.
+#     20스텝도 확대 비교에서 구별되지 않았지만 옷 3벌·시드 1개로만 본 결과라 기본값은 25로 둔다.
 #     같은 인물·옷 3벌·시드 2개로 비교했을 때 평균 픽셀 차이 0.2~0.3, 프린트를 확대해도 구별 불가.
 #     CatVTON에서 스텝을 줄였다가 질감이 무너진 적이 있으므로(F-7) 더 줄이려면 반드시 눈으로 확인할 것.
 #   - 정밀도: T4는 fp16이 fp32보다 4배 빠르고(50스텝 117초 vs 472초) 결과는 같다(F-13·F-14).
@@ -30,7 +31,7 @@ from paths import FASHN_REPO, FASHN_WEIGHTS  # noqa: E402
 #     (평균 픽셀 차이 0.02~0.03). 대신 **첫 호출에서 컴파일하느라 약 90초**가 든다.
 #     서버처럼 한 번 띄워 두고 쓰는 경우에만 이득이라, 앱 시작 때 warmup()으로 미리 치른다.
 #     끄려면 환경변수 FITCHECK_COMPILE=0. P100 등 Triton 미지원 GPU에서는 조용히 무시된다(ENVIRONMENT #10).
-DEFAULT_STEPS = 30
+DEFAULT_STEPS = 25
 DEFAULT_GUIDANCE = 2.5
 DEFAULT_SEED = 42
 COMPILE = os.environ.get('FITCHECK_COMPILE', '1') != '0'

@@ -7,7 +7,7 @@ Kaggle T4는 보통 2장이라, GPU마다 워커 프로세스를 하나씩 띄�
 다른 실험에 쓸 때는 맨 위 JOBS만 바꾼다. 한 줄 = 한 장.
 올릴 때: PYTHONUTF8=1 kaggle kernels push -p kaggle_fashn_t4x2 --accelerator NvidiaTeslaT4
 
-지금 JOBS: torch.compile 이 30스텝 추론을 더 빠르게 하는가 (F-20과 같은 조건).
+지금 JOBS: 스텝 20·25도 쓸 만한가 + 전처리(자세·부위 인식)가 몇 초를 먹는가.
 """
 import csv
 import json
@@ -20,19 +20,20 @@ WORK = '/kaggle/tmp/fashn'
 REPO = os.path.join(WORK, 'fashn-vton-1.5')
 WEIGHTS = os.path.join(WORK, 'weights')
 OUT = '/kaggle/working/fashn_t4x2'
-FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed', 'dtype',
+FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed', 'dtype', 'skip_cfg',
           'gpu', 'seconds', 'broken', 'file']
 
-# (묶음, 인물, 옷, category, 스텝, guidance, 시드, dtype)
-# J: torch.compile 이 스텝당 비용을 줄이는가. F-20(I 묶음, 30스텝)과 같은 인물·옷·시드로 compile만 켠다.
-#    샘플링 수학을 바꾸지 않으므로 결과는 같아야 한다 — 시간만 줄면 성공.
-#    CatVTON 때는 P100이 Triton을 지원하지 않아 조용히 eager로 돌아갔다(ENVIRONMENT #10). T4(7.5)는 지원한다.
-COMPILE = True          # 워커가 모델을 올린 뒤 forward_for_cfg 를 컴파일한다
-COMPILE_WARMUP = True   # 첫 호출에서 컴파일하느라 오래 걸리므로, 측정 전에 한 장 버린다
+# (묶음, 인물, 옷, category, 스텝, guidance, 시드, dtype, CFG 생략 스텝 수)
+# L: 스텝을 30보다 더 줄일 수 있는가 (20·25). 30스텝 결과는 F-21(J)에 있다. 같은 시드·옷.
+#    동시에 전처리(자세 인식 DWPose + 부위 인식 파싱)가 한 장에서 몇 초를 먹는지 따로 잰다.
+#    합성을 아무리 줄여도 전처리가 크면 거기가 새 병목이 된다.
+COMPILE = True
+COMPILE_WARMUP = True
+MEASURE_PREPROCESS = True   # 워커가 시작할 때 포즈·파싱 시간을 따로 잰다
 JOBS = []
 for garment in ('shirt_blue', 'tee_khaki', 'tee_orangutan'):
-    for seed in (42, 123):
-        JOBS.append(('J', 'team02', garment, 'tops', 30, 2.5, seed, 'fp16'))
+    for steps in (20, 25):
+        JOBS.append(('L', 'team02', garment, 'tops', steps, 2.5, 42, 'fp16', 1))
 
 
 def run(cmd):
@@ -43,8 +44,8 @@ def run(cmd):
 
 
 def job_name(job):
-    group, person, garment, _category, steps, guidance, seed, dtype = job
-    return f'{group}__{person}__{garment}__st{steps}_g{guidance:g}_s{seed}_{dtype}.png'
+    group, person, garment, _category, steps, guidance, seed, dtype, skip = job
+    return f'{group}__{person}__{garment}__st{steps}_g{guidance:g}_s{seed}_{dtype}_skip{skip}.png'
 
 
 def worker(index):
@@ -85,12 +86,28 @@ def worker(index):
             print(f'{tag} 컴파일 워밍업 {time.time() - t0:.1f}초', flush=True)
             current = first[7]
 
+    if MEASURE_PREPROCESS and jobs:
+        # 합성 말고 앞단(자세 인식·부위 인식)이 몇 초인지. 3회 평균
+        arr = np.array(ImageOps.exif_transpose(
+            Image.open(spec['persons'][jobs[0][1]])).convert('RGB'))
+        pipeline.pose_model(arr[..., ::-1]); pipeline.hp_model.predict(arr)   # 워밍업
+        t0 = time.time()
+        for _ in range(3):
+            pipeline.pose_model(arr[..., ::-1])
+        pose_s = (time.time() - t0) / 3
+        t0 = time.time()
+        for _ in range(3):
+            pipeline.hp_model.predict(arr)
+        parse_s = (time.time() - t0) / 3
+        print(f'{tag} 전처리: 자세 인식 {pose_s:.2f}초 + 부위 인식 {parse_s:.2f}초 '
+              f'= {pose_s + parse_s:.2f}초 (인물 1장 기준, 옷 사진도 같은 과정을 한 번 더 거친다)', flush=True)
+
     csv_path = os.path.join(OUT, f'results_gpu{index}.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as log:
         writer = csv.DictWriter(log, fieldnames=FIELDS)
         writer.writeheader()
         for done, job in enumerate(jobs, 1):
-            group, person_name, garment_name, category, steps, guidance, seed, dtype = job
+            group, person_name, garment_name, category, steps, guidance, seed, dtype, skip = job
             if dtype != current:
                 # kaggle_fashn_speed에서 검증한 방식
                 pipeline.inference_dtype = dtypes[dtype]
@@ -100,12 +117,14 @@ def worker(index):
             person = ImageOps.exif_transpose(Image.open(spec['persons'][person_name])).convert('RGB')
             garment = ImageOps.exif_transpose(Image.open(spec['garments'][garment_name])).convert('RGB')
             name = job_name(job)
-            row = dict(zip(FIELDS, [group, person_name, garment_name, category, steps, guidance, seed, dtype, index]))
+            row = dict(zip(FIELDS, [group, person_name, garment_name, category, steps, guidance, seed, dtype,
+                                    skip, index]))
             start = time.time()
             try:
                 result = pipeline(person_image=person, garment_image=garment, category=category,
                                   garment_photo_type='flat-lay', num_timesteps=steps,
-                                  guidance_scale=guidance, seed=seed)
+                                  guidance_scale=guidance, seed=seed,
+                                  skip_cfg_last_n_steps=skip)
                 image = result.images[0]
                 image.save(os.path.join(OUT, name))
                 row['seconds'] = f'{time.time() - start:.1f}'

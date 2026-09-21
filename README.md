@@ -16,7 +16,7 @@
 2. **런타임 → 런타임 유형 변경 → GPU (T4)**
 3. 셀을 위에서부터 실행 → 마지막 셀 출력의 **공개 링크(`*.gradio.live`)** 를 연다
 
-최초 1회 설치·가중치 내려받기에 약 5분. 합성은 T4 기준 한 장 약 2분(품질 우선 설정).
+최초 1회 설치·가중치 내려받기에 약 5분. 합성은 T4 기준 한 장 약 70초.
 사진은 **정면 · 팔은 몸에서 주먹 하나 간격 · 머리부터 발끝까지 화면 가득** 이어야 한다
 (앱이 올리는 순간 검사해서 안내한다).
 
@@ -37,7 +37,7 @@
 | 역할 | 사용 |
 |---|---|
 | 가상 피팅 합성 (**현재**) | [FASHN VTON v1.5](https://github.com/fashn-AI/fashn-vton-1.5) (Apache-2.0, 마스크 없이 픽셀 공간 생성) |
-| 기본 설정 | fp16 · 50스텝 · guidance 2.5 (`app/fashn_core.py`, 근거는 docs/PLAN.md F-11·F-13·F-14) |
+| 기본 설정 | fp16 · 30스텝 · guidance 2.5 (`app/fashn_core.py`, 근거는 docs/PLAN.md F-11·F-13·F-14·F-20) |
 | 가상 피팅 합성 (이전) | [CatVTON](https://github.com/Zheng-Chong/CatVTON) — `app/tryon_core.py` 에 남아 있음(벤치마크·과거 실험 재현용) |
 | 사진 자세·거리 검사 | MediaPipe Pose (`app/photo_check.py`) |
 | 사이즈 추천 | 치수표 대비 여유분 계산 (`app/size_fit.py`, `app/body_profile.py`) |

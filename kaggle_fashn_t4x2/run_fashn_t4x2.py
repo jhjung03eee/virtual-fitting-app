@@ -7,7 +7,7 @@ Kaggle T4는 보통 2장이라, GPU마다 워커 프로세스를 하나씩 띄�
 다른 실험에 쓸 때는 맨 위 JOBS만 바꾼다. 한 줄 = 한 장.
 올릴 때: PYTHONUTF8=1 kaggle kernels push -p kaggle_fashn_t4x2 --accelerator NvidiaTeslaT4
 
-지금 JOBS: 같은 팀원 사진에 상의(셔츠·반팔·프린트 티)를 입히면 원래 옷 흔적이 남는가.
+지금 JOBS: 30스텝이 50스텝과 품질이 같은가 (F-19와 같은 조건, 스텝만 다름).
 """
 import csv
 import json
@@ -24,13 +24,13 @@ FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed',
           'gpu', 'seconds', 'broken', 'file']
 
 # (묶음, 인물, 옷, category, 스텝, guidance, 시드, dtype)
-# H: 상의 확인. F-18과 같은 인물(02, 투톤 라글란 + 큰 프린트 티를 입고 있음)에 상의를 입힌다.
-#    지금 입은 옷이 화려해서 **원래 옷 흔적이 남는지**를 보기 좋은 조건이다.
-#    셔츠(긴팔·단추)·반팔·사진 프린트 흰 티 세 종류. 설정은 앱 기본값(fp16·50스텝·2.5).
+# I: 스텝 30이 50과 품질이 같은가 (추론 시간 병목 해결). 50스텝 결과는 F-19(H 묶음)에 이미 있으므로
+#    같은 인물·옷·시드로 30스텝만 돌려 1:1 비교한다. 시간은 1.7배 빨라질 것으로 예상(F-13 비례식).
+#    주의: CatVTON 때 스텝을 줄였다가 글자·질감이 무너져 되돌린 적 있다(F-7). 눈으로 꼭 확인할 것.
 JOBS = []
 for garment in ('shirt_blue', 'tee_khaki', 'tee_orangutan'):
     for seed in (42, 123):
-        JOBS.append(('H', 'team02', garment, 'tops', 50, 2.5, seed, 'fp16'))
+        JOBS.append(('I', 'team02', garment, 'tops', 30, 2.5, seed, 'fp16'))
 
 
 def run(cmd):

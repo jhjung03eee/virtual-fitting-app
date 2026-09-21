@@ -199,7 +199,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
         '# 가상 피팅 데모\n'
         '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다 (FASHN VTON v1.5).\n\n'
         '- 인물은 **정면, 머리부터 발끝까지 화면을 꽉 채운** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 2분 (50스텝, 품질 우선). 빠르게 보려면 고급 설정에서 스텝을 30으로'
+        '- T4 GPU 기준 한 장에 약 70초 (30스텝). 더 높이려면 고급 설정에서 스텝을 올리세요'
     )
 
     with gr.Row():
@@ -242,7 +242,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 )
                 steps_in = gr.Slider(
                     20, 50, value=DEFAULT_STEPS, step=1,
-                    label='추론 스텝 (50 기본, 30이면 약 1.7배 빠름)',
+                    label='추론 스텝 (30 기본. 50으로 올려도 결과는 거의 같고 1.7배 느려진다)',
                 )
                 guidance_in = gr.Slider(
                     1.0, 4.0, value=DEFAULT_GUIDANCE, step=0.1,

@@ -19,12 +19,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paths import FASHN_REPO, FASHN_WEIGHTS  # noqa: E402
 
 # 기본값 근거:
-#   - 스텝 50, guidance 2.5: 글자 프린트가 가장 또렷했다. guidance가 스텝보다 중요(F-11).
-#     FASHN 저장소 기본은 30스텝·1.5다.
+#   - guidance 2.5: 글자 프린트가 가장 또렷했다. guidance가 스텝보다 중요(F-11). FASHN 저장소 기본은 1.5.
+#   - 스텝 30: 50스텝과 결과가 사실상 같은데 1.7배 빠르다(F-20, T4 118초 → 68초).
+#     같은 인물·옷 3벌·시드 2개로 비교했을 때 평균 픽셀 차이 0.2~0.3, 프린트를 확대해도 구별 불가.
+#     CatVTON에서 스텝을 줄였다가 질감이 무너진 적이 있으므로(F-7) 더 줄이려면 반드시 눈으로 확인할 것.
 #   - 정밀도: T4는 fp16이 fp32보다 4배 빠르고(50스텝 117초 vs 472초) 결과는 같다(F-13·F-14).
 #     FASHN은 T4·P100에서도 bf16을 고르는데, 이 GPU들은 bf16을 흉내만 내서 가장 느리다(T4 430초/30스텝).
 #     bf16을 제대로 지원하는 GPU(compute capability 8 이상: L4·A100·H100)에서는 bf16을 그대로 쓴다.
-DEFAULT_STEPS = 50
+DEFAULT_STEPS = 30
 DEFAULT_GUIDANCE = 2.5
 DEFAULT_SEED = 42
 

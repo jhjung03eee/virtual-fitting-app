@@ -7,7 +7,7 @@ Kaggle T4는 보통 2장이라, GPU마다 워커 프로세스를 하나씩 띄�
 다른 실험에 쓸 때는 맨 위 JOBS만 바꾼다. 한 줄 = 한 장.
 올릴 때: PYTHONUTF8=1 kaggle kernels push -p kaggle_fashn_t4x2 --accelerator NvidiaTeslaT4
 
-지금 JOBS: 가이드대로 찍은 팀원 전신 사진에 바지가 제대로 입혀지는가 (F-12의 남은 숙제).
+지금 JOBS: 같은 팀원 사진에 상의(셔츠·반팔·프린트 티)를 입히면 원래 옷 흔적이 남는가.
 """
 import csv
 import json
@@ -24,13 +24,13 @@ FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed',
           'gpu', 'seconds', 'broken', 'file']
 
 # (묶음, 인물, 옷, category, 스텝, guidance, 시드, dtype)
-# G: 하의 확인 (F-12의 남은 숙제). 촬영 가이드대로 찍고 크롭한 팀원 사진(인물 비율 0.746)에
-#    FASHN 바지가 제대로 입혀지는지. 실패 이력 옷(코듀로이)과 성공 이력 옷(올리브)을 같이 넣어
-#    실패 시 "사진 탓인지 옷 탓인지"를 가른다. 설정은 앱 기본값(fp16·50스텝·2.5).
+# H: 상의 확인. F-18과 같은 인물(02, 투톤 라글란 + 큰 프린트 티를 입고 있음)에 상의를 입힌다.
+#    지금 입은 옷이 화려해서 **원래 옷 흔적이 남는지**를 보기 좋은 조건이다.
+#    셔츠(긴팔·단추)·반팔·사진 프린트 흰 티 세 종류. 설정은 앱 기본값(fp16·50스텝·2.5).
 JOBS = []
-for garment in ('pants_corduroy', 'pants_forest'):
+for garment in ('shirt_blue', 'tee_khaki', 'tee_orangutan'):
     for seed in (42, 123):
-        JOBS.append(('G', 'team02', garment, 'bottoms', 50, 2.5, seed, 'fp16'))
+        JOBS.append(('H', 'team02', garment, 'tops', 50, 2.5, seed, 'fp16'))
 
 
 def run(cmd):

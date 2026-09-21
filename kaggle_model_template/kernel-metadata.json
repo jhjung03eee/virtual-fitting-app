@@ -1,0 +1,15 @@
+{
+  "id": "jefferyjung/vfa-template",
+  "title": "vfa-template",
+  "code_file": "run_template.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": ["jefferyjung/vfa-set2", "jefferyjung/vfa-person-full", "jefferyjung/vfa-real-garments"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}

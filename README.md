@@ -6,6 +6,7 @@
 모델은 **직접 구동(self-hosted)** 한다. 외부 합성 API는 쓰지 않는다.
 
 > - 전체 진행 현황·실험 결과·판단 근거: **[docs/PLAN.md](docs/PLAN.md)**
+> - 팀원 각자 모델 하나씩 조사·실험하는 규약: **[docs/MODEL_STUDY.md](docs/MODEL_STUDY.md)**
 > - 환경 함정 모음: **[docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)**
 
 ## 팀원용 빠른 시작 — 데모 보기

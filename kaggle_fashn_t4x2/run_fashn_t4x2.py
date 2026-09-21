@@ -7,7 +7,7 @@ Kaggle T4는 보통 2장이라, GPU마다 워커 프로세스를 하나씩 띄�
 다른 실험에 쓸 때는 맨 위 JOBS만 바꾼다. 한 줄 = 한 장.
 올릴 때: PYTHONUTF8=1 kaggle kernels push -p kaggle_fashn_t4x2 --accelerator NvidiaTeslaT4
 
-지금 JOBS: 글자·사진 프린트·질감 옷에서도 fp16이 fp32와 같은가 (50스텝, guidance 2.5 = 현재 기본값).
+지금 JOBS: 가이드대로 찍은 팀원 전신 사진에 바지가 제대로 입혀지는가 (F-12의 남은 숙제).
 """
 import csv
 import json
@@ -24,14 +24,13 @@ FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed',
           'gpu', 'seconds', 'broken', 'file']
 
 # (묶음, 인물, 옷, category, 스텝, guidance, 시드, dtype)
+# G: 하의 확인 (F-12의 남은 숙제). 촬영 가이드대로 찍고 크롭한 팀원 사진(인물 비율 0.746)에
+#    FASHN 바지가 제대로 입혀지는지. 실패 이력 옷(코듀로이)과 성공 이력 옷(올리브)을 같이 넣어
+#    실패 시 "사진 탓인지 옷 탓인지"를 가른다. 설정은 앱 기본값(fp16·50스텝·2.5).
 JOBS = []
-for person, garment, category in (('kakao_front_upper', 'sweatshirt_text', 'tops'),
-                                  ('kakao_front_upper', 'tee_orangutan', 'tops'),
-                                  ('kakao_front_upper', 'shirt_blue', 'tops'),
-                                  ('demo_person1_full', 'pants_corduroy', 'bottoms')):
+for garment in ('pants_corduroy', 'pants_forest'):
     for seed in (42, 123):
-        for dtype in ('fp32', 'fp16'):
-            JOBS.append(('D', person, garment, category, 50, 2.5, seed, dtype))
+        JOBS.append(('G', 'team02', garment, 'bottoms', 50, 2.5, seed, 'fp16'))
 
 
 def run(cmd):
@@ -132,6 +131,8 @@ for root, _dirs, files in os.walk('/kaggle/input'):
         path = os.path.join(root, f)
         if f == 'KakaoTalk_20260909_190109015_02.jpg':
             persons['kakao_front_original'] = path
+        elif f == 'person_team02.jpg':          # 2026-09-21 촬영·크롭, 가이드 통과
+            persons['team02'] = path
         elif root.endswith('inputs/image') and f in ('demo_person1_full.jpg', 'kakao_front_upper.jpg'):
             persons[os.path.splitext(f)[0]] = path
         elif f == 'garment_tee_khaki.jpg':

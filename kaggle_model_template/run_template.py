@@ -7,7 +7,7 @@
   4. PYTHONUTF8=1 kaggle kernels push -p kaggle_<모델이름> --accelerator NvidiaTeslaT4
 
 측정·CSV 저장·입력 찾기·워밍업은 이미 들어 있다. 바꾸지 말 것:
-  같은 인물 1명 × 옷 4벌 × 시드 2개 = 8장. 조건이 다르면 다른 팀원 결과와 비교가 안 된다.
+  같은 인물 1명 × 옷 3벌 × 시드 2개 = 6장. 조건이 다르면 다른 팀원 결과와 비교가 안 된다.
 """
 import csv
 import os
@@ -24,8 +24,7 @@ PERSON = 'person_team02.jpg'
 GARMENTS = {
     'shirt_blue': ('garment_shirt_blue.jpg', 'tops'),
     'tee_khaki': ('garment_tee_khaki.jpg', 'tops'),
-    'tee_orangutan': ('tshirts.jpg', 'tops'),
-    'pants_corduroy': ('pants.jpg', 'bottoms'),   # 하의를 지원하지 않는 모델이면 이 줄을 지운다
+    'pants_forest': ('garment_pants_forest.jpg', 'bottoms'),   # 하의 미지원 모델이면 이 줄을 지운다
 }
 SEEDS = (42, 123)
 FIELDS = ['model', 'garment', 'category', 'seed', 'seconds', 'peak_mem_gb', 'broken', 'file']

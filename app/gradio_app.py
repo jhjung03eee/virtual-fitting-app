@@ -40,7 +40,7 @@ _gcu._json_schema_to_python_type = _safe_json_schema_to_python_type
 _gcu.get_type = _safe_get_type
 # -------------------------------------------------------------------------
 
-from fashn_core import (try_on, load_models, FASHN_REPO,
+from fashn_core import (try_on, load_models, warmup, FASHN_REPO,
                         DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
 from photo_check import check_photo
@@ -199,7 +199,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
         '# 가상 피팅 데모\n'
         '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다 (FASHN VTON v1.5).\n\n'
         '- 인물은 **정면, 머리부터 발끝까지 화면을 꽉 채운** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 70초 (30스텝). 더 높이려면 고급 설정에서 스텝을 올리세요'
+        '- T4 GPU 기준 한 장에 약 60초 (30스텝). 더 높이려면 고급 설정에서 스텝을 올리세요'
     )
 
     with gr.Row():
@@ -278,6 +278,9 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
 if __name__ == '__main__':
     print('모델 로딩 중... (최초 1회)', flush=True)
     load_models()
+    # 첫 사용자가 컴파일 시간(약 90초)을 떠안지 않게 미리 한 장 돌려 둔다
+    print('준비 운동 중... (torch.compile, 약 1~2분)', flush=True)
+    print('준비 운동 완료:', warmup(), '초', flush=True)
     print('로딩 완료. Gradio 실행합니다.', flush=True)
     # show_api=False: API 스키마 생성 경로(gradio_client)가 pydantic 버전에 따라 터지는 걸 회피.
     #   단 gradio 6에서 이 인자가 없어져 TypeError가 난다(Colab 2026-09-16) → 빼고 다시 띄운다.

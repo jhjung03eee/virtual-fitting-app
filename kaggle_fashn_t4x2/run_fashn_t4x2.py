@@ -7,7 +7,7 @@ Kaggle T4는 보통 2장이라, GPU마다 워커 프로세스를 하나씩 띄�
 다른 실험에 쓸 때는 맨 위 JOBS만 바꾼다. 한 줄 = 한 장.
 올릴 때: PYTHONUTF8=1 kaggle kernels push -p kaggle_fashn_t4x2 --accelerator NvidiaTeslaT4
 
-지금 JOBS: 30스텝이 50스텝과 품질이 같은가 (F-19와 같은 조건, 스텝만 다름).
+지금 JOBS: torch.compile 이 30스텝 추론을 더 빠르게 하는가 (F-20과 같은 조건).
 """
 import csv
 import json
@@ -24,13 +24,15 @@ FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed',
           'gpu', 'seconds', 'broken', 'file']
 
 # (묶음, 인물, 옷, category, 스텝, guidance, 시드, dtype)
-# I: 스텝 30이 50과 품질이 같은가 (추론 시간 병목 해결). 50스텝 결과는 F-19(H 묶음)에 이미 있으므로
-#    같은 인물·옷·시드로 30스텝만 돌려 1:1 비교한다. 시간은 1.7배 빨라질 것으로 예상(F-13 비례식).
-#    주의: CatVTON 때 스텝을 줄였다가 글자·질감이 무너져 되돌린 적 있다(F-7). 눈으로 꼭 확인할 것.
+# J: torch.compile 이 스텝당 비용을 줄이는가. F-20(I 묶음, 30스텝)과 같은 인물·옷·시드로 compile만 켠다.
+#    샘플링 수학을 바꾸지 않으므로 결과는 같아야 한다 — 시간만 줄면 성공.
+#    CatVTON 때는 P100이 Triton을 지원하지 않아 조용히 eager로 돌아갔다(ENVIRONMENT #10). T4(7.5)는 지원한다.
+COMPILE = True          # 워커가 모델을 올린 뒤 forward_for_cfg 를 컴파일한다
+COMPILE_WARMUP = True   # 첫 호출에서 컴파일하느라 오래 걸리므로, 측정 전에 한 장 버린다
 JOBS = []
 for garment in ('shirt_blue', 'tee_khaki', 'tee_orangutan'):
     for seed in (42, 123):
-        JOBS.append(('I', 'team02', garment, 'tops', 30, 2.5, seed, 'fp16'))
+        JOBS.append(('J', 'team02', garment, 'tops', 30, 2.5, seed, 'fp16'))
 
 
 def run(cmd):
@@ -64,7 +66,25 @@ def worker(index):
     pipeline = TryOnPipeline(weights_dir=WEIGHTS)
     print(f'{tag} {torch.cuda.get_device_name(0)} 모델 로딩 {time.time() - t0:.1f}초, 작업 {len(jobs)}장', flush=True)
 
-    current = None
+    current = None   # 지금 모델에 적용돼 있는 dtype
+    if COMPILE:
+        # 모듈 전체가 아니라 실제로 매 스텝 불리는 메서드를 컴파일한다
+        pipeline.tryon_model.forward_for_cfg = torch.compile(pipeline.tryon_model.forward_for_cfg)
+        if COMPILE_WARMUP and jobs:
+            first = jobs[0]
+            dtype0 = dtypes[first[7]]
+            pipeline.inference_dtype = dtype0
+            pipeline.tryon_model.to(dtype=dtype0)
+            t0 = time.time()
+            pipeline(person_image=ImageOps.exif_transpose(
+                         Image.open(spec['persons'][first[1]])).convert('RGB'),
+                     garment_image=ImageOps.exif_transpose(
+                         Image.open(spec['garments'][first[2]])).convert('RGB'),
+                     category=first[3], garment_photo_type='flat-lay',
+                     num_timesteps=3, guidance_scale=first[5], seed=0)
+            print(f'{tag} 컴파일 워밍업 {time.time() - t0:.1f}초', flush=True)
+            current = first[7]
+
     csv_path = os.path.join(OUT, f'results_gpu{index}.csv')
     with open(csv_path, 'w', encoding='utf-8', newline='') as log:
         writer = csv.DictWriter(log, fieldnames=FIELDS)

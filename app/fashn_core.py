@@ -26,9 +26,14 @@ from paths import FASHN_REPO, FASHN_WEIGHTS  # noqa: E402
 #   - 정밀도: T4는 fp16이 fp32보다 4배 빠르고(50스텝 117초 vs 472초) 결과는 같다(F-13·F-14).
 #     FASHN은 T4·P100에서도 bf16을 고르는데, 이 GPU들은 bf16을 흉내만 내서 가장 느리다(T4 430초/30스텝).
 #     bf16을 제대로 지원하는 GPU(compute capability 8 이상: L4·A100·H100)에서는 bf16을 그대로 쓴다.
+#   - torch.compile: 스텝당 비용을 줄여 16% 빨라진다(F-21, T4 30스텝 70초 → 59초). 결과는 사실상 동일
+#     (평균 픽셀 차이 0.02~0.03). 대신 **첫 호출에서 컴파일하느라 약 90초**가 든다.
+#     서버처럼 한 번 띄워 두고 쓰는 경우에만 이득이라, 앱 시작 때 warmup()으로 미리 치른다.
+#     끄려면 환경변수 FITCHECK_COMPILE=0. P100 등 Triton 미지원 GPU에서는 조용히 무시된다(ENVIRONMENT #10).
 DEFAULT_STEPS = 30
 DEFAULT_GUIDANCE = 2.5
 DEFAULT_SEED = 42
+COMPILE = os.environ.get('FITCHECK_COMPILE', '1') != '0'
 
 # 앱의 옷 종류 → FASHN category. FASHN은 이너/아우터 구분이 없어 상의로 넣는다.
 CATEGORY_BY_CLOTH_TYPE = {
@@ -67,6 +72,9 @@ def load_models(weights_dir=None):
     from fashn_vton import TryOnPipeline
 
     pipeline = TryOnPipeline(weights_dir=weights_dir or FASHN_WEIGHTS)
+    if COMPILE:
+        # 모듈 전체가 아니라 매 스텝 실제로 불리는 메서드를 컴파일한다(kaggle_fashn_t4x2 J 묶음에서 검증)
+        pipeline.tryon_model.forward_for_cfg = torch.compile(pipeline.tryon_model.forward_for_cfg)
     dtype = choose_dtype(torch)
     if pipeline.inference_dtype != dtype:
         # kaggle_fashn_speed·kaggle_fashn_t4x2에서 검증한 방식
@@ -121,3 +129,18 @@ def try_on(person, garment, cloth_type='upper', steps=DEFAULT_STEPS, guidance_sc
         return result
     return result, {'total_s': round(time.perf_counter() - start, 2), 'seed': int(seed),
                     'dtype': str(pipeline.inference_dtype).replace('torch.', '')}
+
+
+def warmup():
+    """컴파일과 커널 선택을 미리 끝내 둔다. 앱 시작 때 1회 부르면 첫 사용자가 90초를 기다리지 않는다.
+
+    FASHN 저장소의 예시 이미지를 쓴다. 없으면 조용히 건너뛴다.
+    """
+    import glob
+    person = glob.glob(os.path.join(FASHN_REPO, 'examples/data/model.*'))
+    garment = glob.glob(os.path.join(FASHN_REPO, 'examples/data/garment.*'))
+    if not person or not garment:
+        return None
+    start = time.perf_counter()
+    try_on(person[0], garment[0], cloth_type='upper', steps=3, garment_photo_type='model')
+    return round(time.perf_counter() - start, 1)

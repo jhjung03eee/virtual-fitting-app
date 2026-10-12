@@ -153,17 +153,21 @@ def garment_mask(person_small: Image.Image, result: Image.Image, category: str =
 
 
 def restore_original(person: Image.Image, result: Image.Image, category: str = 'tops',
-                     scale: float = 2.0) -> Tuple[Image.Image, Optional[Image.Image]]:
+                     scale: float = 2.0, upscaled: Optional[Image.Image] = None,
+                     ) -> Tuple[Image.Image, Optional[Image.Image]]:
     """옷 자리만 결과, 나머지는 원본인 이미지를 result 의 scale 배 크기로 돌려준다.
 
     scale 을 키우면 얼굴·배경은 원본 해상도로 또렷해지고, 옷은 결과를 늘린 것이라 그만큼 흐리다.
+    upscaled: 결과를 업스케일러(Real-ESRGAN 등)로 키운 이미지. 주면 옷 자리에 단순 확대 대신 이걸 쓴다.
+    마스크는 언제나 원래 결과(576px) 기준으로 구한다.
     반환: (합친 이미지, 마스크). 구분 모델을 못 쓰면 (결과를 늘린 것, None).
     """
     person = person.convert('RGB')
     result = result.convert('RGB')
     size = (int(round(result.width * scale)), int(round(result.height * scale)))
     mask = garment_mask(person.resize(result.size, Image.LANCZOS), result, category)
-    big_result = result.resize(size, Image.LANCZOS)
+    source = result if upscaled is None else upscaled.convert('RGB')
+    big_result = source.resize(size, Image.LANCZOS)
     if mask is None:
         return big_result, None
     big_mask = mask.resize(size, Image.BILINEAR)

@@ -10,3 +10,7 @@ __pycache__/
 .ipynb_checkpoints/
 *.ckpt
 *.safetensors
+
+# 사이즈 검증 기록 (몸 치수 = 개인정보). 양식(*_template.csv)만 커밋
+data/fit_eval/people.csv
+data/fit_eval/garments.csv

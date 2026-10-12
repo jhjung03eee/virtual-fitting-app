@@ -14,3 +14,6 @@ __pycache__/
 # 사이즈 검증 기록 (몸 치수 = 개인정보). 양식(*_template.csv)만 커밋
 data/fit_eval/people.csv
 data/fit_eval/garments.csv
+
+# mediapipe 모델 파일은 실행 때 내려받는다
+.scratch/mediapipe/*.tflite

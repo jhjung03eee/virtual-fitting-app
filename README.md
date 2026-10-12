@@ -29,6 +29,7 @@
 - [x] 옷 치수표 대비 여유분 계산 → S/M/L 추천 (사용자 입력 방식, 단위 테스트)
 - [x] 사진 자세·거리 검사(`app/photo_check.py`)를 앱에 연결
 - [x] **앱에 FASHN 연결 + 실제 GPU에서 합성·사이즈 추천·서버 기동 검증** (docs/PLAN.md F-17)
+- [x] 옷 사진 검사(`app/garment_check.py`)를 FASHN 기준으로 고쳐 앱에 연결 + 후보 여러 장 생성 (F-23)
 - [ ] 촬영 가이드대로 찍은 새 전신 사진으로 **하의(바지)** 확인 (F-12)
 - [ ] 고성능 GPU(A100 등)에서 속도 측정, 시연 환경 확정
 - [ ] 모바일 앱 UI + 추론 서버 분리
@@ -49,6 +50,7 @@
 app/fashn_core.py          합성 엔진 (FASHN). 앱·실험이 공유하는 기본값
 app/gradio_app.py          웹 데모 화면 (합성 + 사진 검사 + 사이즈 추천)
 app/photo_check.py         인물 사진 자세·거리·역광 검사 (GPU 불필요)
+app/garment_check.py       옷 사진 배경·해상도·착용컷 검사 (경고만, GPU 불필요)
 app/size_fit.py            치수표 대비 여유분 계산 → S/M/L 추천
 app/tryon_core.py          CatVTON 추론 (과거 실험 재현용)
 notebooks/run_app.ipynb    Colab에서 데모 띄우기

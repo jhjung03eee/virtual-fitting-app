@@ -1,15 +1,16 @@
-"""옷 사진이 합성에 맞는지 미리 검사하고, 안 되는 옷은 경고한다 (A안: 지원 범위 명시).
+"""옷 사진이 합성에 맞는지 미리 검사하고, 안 맞으면 경고한다 (A안: 지원 범위 명시).
 
-실험으로 확인한 범위:
-  - 잘 됨: 단색·중간 톤 기본 의류, 큰 글자 프린트, 단색 배경의 제품 단독 컷
-  - 안 됨: 사진 같은 프린트(오랑우탄 티셔츠가 얼룩으로 뭉개짐), 흰 옷(색·프린트 불안정),
-          모델이 입은 착용컷(몸·배경까지 옷으로 들어감)
+**FASHN 기준 (2026-10-12, docs/PLAN.md F-23).** 처음 규칙은 CatVTON 실험으로 정했다:
+  - CatVTON에서 안 됐던 것: 사진 같은 프린트(오랑우탄 티가 얼룩으로 뭉개짐), 흰 옷(색·프린트 불안정),
+    모델이 입은 착용컷(몸·배경까지 옷으로 들어감)
+엔진을 FASHN으로 바꾼 뒤 사진 프린트 흰 티가 형태·색까지 재현됐고(F-14·F-19),
+착용컷은 FASHN이 `garment_photo_type='model'`로 따로 받는다. 그래서
+  - 흰 옷·사진 프린트 경고는 **뺐다.** 지표(lightness·chroma·off_color·edge)는 metrics에 남긴다
+  - 피부가 많이 보이면 "착용 사진으로 바꿔라"고 안내한다 (상품 사진 모드일 때만)
+  - 착용 사진 모드에서는 몸·배경이 있는 게 정상이라 피부·배경 검사를 건너뛴다
 
 **경고만 하고 합성은 막지 않는다.** 규칙이 틀릴 수 있고, 사용자가 결과를 보고 판단하면 된다.
-판정 상수는 샘플 6벌(set2 3벌 + 초기 3벌)로 정한 초기값이다.
-
-알려진 한계: 네이비 코듀로이 바지(실패)는 이 지표로는 성공한 올리브 바지와 구별되지 않는다.
-특수 질감은 축소한 사진에서 잘 안 드러난다. torch를 임포트하지 않는다.
+판정 상수는 샘플 6벌(set2 3벌 + 초기 3벌)로 정한 초기값이다. torch를 임포트하지 않는다.
 """
 from dataclasses import dataclass, field
 from typing import Dict, List
@@ -23,11 +24,12 @@ ANALYSIS_SIDE = 512
 BACKGROUND_TOLERANCE = 45.0   # color_match.garment_pixels 와 같은 값
 MIN_FOREGROUND = 0.15         # 이보다 작으면 배경과 같은 색 옷(흰 배경의 흰 옷)
 MAX_SKIN = 0.05               # 전경 중 피부 비율. 넘으면 착용컷
-MAX_OFF_COLOR = 0.15          # 옷 중앙값 색에서 먼 픽셀 비율. 샘플: 단색 0.02~0.06, 사진 프린트 0.65
-MAX_EDGE = 0.12               # 에지 밀도. 샘플: 단색·글자 0.03~0.07, 사진 프린트 0.21
 MAX_CORNER_STD = 25.0         # 모서리 색 편차. 크면 단색 배경이 아니다
-WHITE_L, WHITE_CHROMA = 85.0, 10.0
 MIN_SHORT_SIDE = 512
+# CatVTON 시절 프린트·흰 옷 경고에 쓰던 기준(FASHN 전환 후 경고에서 뺌, metrics로만 기록):
+#   off_color(옷 중앙값 색에서 먼 픽셀 비율) 0.15 — 샘플: 단색 0.02~0.06, 사진 프린트 0.65
+#   edge(에지 밀도) 0.12 — 샘플: 단색·글자 0.03~0.07, 사진 프린트 0.21
+#   흰 옷: 밝기 L > 85, 채도 < 10
 
 
 @dataclass
@@ -45,7 +47,8 @@ class GarmentCheck:
         return '\n'.join(f'주의: {w}' for w in self.warnings)
 
 
-def check_garment(garment) -> GarmentCheck:
+def check_garment(garment, photo_type='flat-lay') -> GarmentCheck:
+    """photo_type: 'flat-lay'(상품 사진) 또는 'model'(착용 사진). fashn_core.GARMENT_PHOTO_TYPES와 같은 이름."""
     try:
         from skimage.color import rgb2lab
     except ImportError:
@@ -56,6 +59,9 @@ def check_garment(garment) -> GarmentCheck:
     check.metrics['short_side'] = min(image.size)
     if min(image.size) < MIN_SHORT_SIDE:
         check.warnings.append('옷 사진 해상도가 낮아요. 질감이 흐리게 나올 수 있어요.')
+    if photo_type == 'model':
+        # 착용 사진에는 몸·배경이 있는 게 정상이다. FASHN이 사람에게서 옷을 떼어 내므로 더 볼 것이 없다.
+        return check
     image = image.copy()
     image.thumbnail((ANALYSIS_SIDE, ANALYSIS_SIDE))
 
@@ -75,13 +81,13 @@ def check_garment(garment) -> GarmentCheck:
 
     lab = rgb2lab(rgb / 255.0)
     if fraction < MIN_FOREGROUND:
-        # 배경과 같은 색의 옷이다. 이때 전경으로 잡히는 건 프린트뿐이라
-        # 피부·색 지표를 옷 전체에 대해 낼 수 없다(오랑우탄 프린트가 '피부 56%'로 잡혔다).
+        # 배경과 같은 색의 옷이다(흰 배경의 흰 티). 전경으로 잡히는 건 프린트뿐이라
+        # 피부 지표를 옷 전체에 대해 낼 수 없다(오랑우탄 프린트가 '피부 56%'로 잡혔다).
+        # 흰 옷·사진 프린트는 CatVTON에서 실패했지만 FASHN에서는 재현돼 경고하지 않는다(F-14·F-19).
         whole = np.median(lab.reshape(-1, 3), axis=0)
-        if whole[0] > WHITE_L - 10:
-            check.warnings.append('흰색·아주 밝은 옷은 색과 프린트가 정확하지 않을 수 있어요.')
-        if fraction > 0.01 and _edge_density(image, foreground) > MAX_EDGE:
-            check.warnings.append('사진 같은 프린트는 뭉개질 수 있어요. 무지나 큰 글자 프린트가 잘 돼요.')
+        check.metrics['lightness'] = round(float(whole[0]), 1)
+        if fraction > 0.01:
+            check.metrics['edge'] = round(_edge_density(image, foreground), 3)
         return check
 
     median = np.median(lab[foreground], axis=0)
@@ -93,11 +99,7 @@ def check_garment(garment) -> GarmentCheck:
                          skin=round(skin, 3), off_color=round(off_color, 3), edge=round(edge, 3))
 
     if skin > MAX_SKIN:
-        check.warnings.append('사람이 입은 사진 같아요. 옷만 찍힌 제품 사진을 올려주세요.')
-    if median[0] > WHITE_L and chroma < WHITE_CHROMA:
-        check.warnings.append('흰색·아주 밝은 옷은 색과 프린트가 정확하지 않을 수 있어요.')
-    if off_color > MAX_OFF_COLOR or edge > MAX_EDGE:
-        check.warnings.append('사진 같은 프린트나 복잡한 무늬는 뭉개질 수 있어요. 무지나 큰 글자 프린트가 잘 돼요.')
+        check.warnings.append("사람이 입은 사진 같아요. 옷 사진 종류를 '착용 사진'으로 바꿔 주세요.")
     return check
 
 

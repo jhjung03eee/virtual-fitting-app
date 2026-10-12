@@ -185,6 +185,30 @@ class TestGradioWiring(unittest.TestCase):
         self.assertIn('check_photo(', ast.unparse(run),
                       'run() 이 합성 전에 사진 검사를 하지 않는다')
 
+    def test_garment_check_is_wired(self):
+        """옷 사진 검사(app/garment_check.py)가 옷 사진·사진 종류 변경 양쪽에 붙어 있는지.
+
+        사진 종류(상품/착용)에 따라 기준이 달라서, 종류만 바꿔도 다시 검사해야 한다.
+        """
+        source = ast.unparse(self.tree)
+        self.assertIn('from garment_check import check_garment', source)
+
+        status = find_function(self.tree, 'garment_status')
+        self.assertIsNotNone(status, 'garment_status() 가 없다')
+        self.assertIn('photo_type=', ast.unparse(status),
+                      'garment_status() 가 사진 종류를 검사에 넘기지 않는다')
+
+        wired = [ast.unparse(call.func.value) for call in find_click_calls(self.tree)
+                 if isinstance(keyword(call, 'fn'), ast.Name) and keyword(call, 'fn').id == 'garment_status']
+        self.assertIn('garment_in', wired, '옷 사진 업로드에 garment_status 가 연결돼 있지 않다')
+        self.assertIn('garment_photo_in', wired, '사진 종류 변경에 garment_status 가 연결돼 있지 않다')
+
+    def test_run_generates_candidates(self):
+        """후보 장수가 run() 까지 전달되고, 결과가 갤러리로 나가는지."""
+        run = find_function(self.tree, 'run')
+        self.assertIn('num_candidates', [a.arg for a in run.args.args])
+        self.assertIn('gr.Gallery(', ast.unparse(self.tree), '결과 위젯이 갤러리가 아니다')
+
 
 if __name__ == '__main__':
     unittest.main()

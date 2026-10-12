@@ -43,6 +43,7 @@ _gcu.get_type = _safe_get_type
 from fashn_core import (try_on, load_models, warmup, FASHN_REPO,
                         DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
+from garment_check import check_garment
 from photo_check import check_photo
 from size_fit import SizeChart, recommend
 
@@ -159,8 +160,22 @@ def photo_status(person):
     return '\n\n'.join(lines)
 
 
+def garment_status(garment, garment_photo_label):
+    """옷 사진을 올리거나 사진 종류를 바꾸면 검사해 안내한다 (app/garment_check.py).
+
+    경고만 하고 합성은 막지 않는다. 기준은 FASHN 실험 결과에 맞췄다(docs/PLAN.md F-23).
+    """
+    if garment is None:
+        return ''
+    check = check_garment(garment, photo_type=GARMENT_PHOTO_LABELS.get(garment_photo_label, 'flat-lay'))
+    if check.suitable:
+        return '✅ ' + check.message()
+    return '\n\n'.join('⚠️ ' + line for line in check.message().splitlines())
+
+
 def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
-        steps, guidance_scale, seed, chart_file, height, shoulder, chest, waist, hip):
+        steps, guidance_scale, seed, num_candidates,
+        chart_file, height, shoulder, chest, waist, hip, progress=gr.Progress()):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
 
@@ -171,18 +186,29 @@ def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
 
     advice = size_advice(chart_file, height, shoulder, chest, waist, hip)
 
-    result, timing = try_on(
-        person=person,
-        garment=garment,
-        cloth_type=CLOTH_LABELS[cloth_label],
-        garment_photo_type=GARMENT_PHOTO_LABELS[garment_photo_label],
-        steps=int(steps),
-        guidance_scale=float(guidance_scale),
-        seed=int(seed),
-        return_timing=True,
-    )
-    info = f"합성 {timing['total_s']:.0f}초 · 시드 {timing['seed']} · {timing['dtype']}"
-    return result, advice, info
+    # 같은 설정도 시드에 따라 결과가 갈린다(셔츠 6장 중 1장 실패, docs/PLAN.md F-19).
+    # 여러 장을 뽑아 고르게 한다. 시드 -1이면 try_on 이 매번 다른 시드를 뽑는다.
+    count = max(1, int(num_candidates))
+    gallery, seeds, seconds = [], [], []
+    for i in range(count):
+        progress(i / count, desc=f'후보 {i + 1}/{count} 합성 중')
+        result, timing = try_on(
+            person=person,
+            garment=garment,
+            cloth_type=CLOTH_LABELS[cloth_label],
+            garment_photo_type=GARMENT_PHOTO_LABELS[garment_photo_label],
+            steps=int(steps),
+            guidance_scale=float(guidance_scale),
+            seed=int(seed) if int(seed) == -1 else int(seed) + i,
+            return_timing=True,
+        )
+        gallery.append((result, f"시드 {timing['seed']}"))
+        seeds.append(str(timing['seed']))
+        seconds.append(timing['total_s'])
+    info = (f"{count}장 합성 · 장당 {sum(seconds) / count:.0f}초 · 시드 {', '.join(seeds)} · {timing['dtype']}")
+    if count > 1:
+        info += '\n\n마음에 드는 결과의 시드를 고급 설정에 넣으면 같은 결과를 다시 볼 수 있어요.'
+    return gallery, advice, info
 
 
 def _examples():
@@ -199,7 +225,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
         '# 가상 피팅 데모\n'
         '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다 (FASHN VTON v1.5).\n\n'
         '- 인물은 **정면, 머리부터 발끝까지 화면을 꽉 채운** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 50초 (25스텝). 더 높이려면 고급 설정에서 스텝을 올리세요'
+        '- T4 GPU 기준 한 장에 약 50초 (25스텝). 고급 설정에서 후보를 여러 장 뽑으면 그만큼 늘어납니다'
     )
 
     with gr.Row():
@@ -209,6 +235,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 '인물 사진을 올리면 자세·거리를 먼저 검사해요 '
                 '(정면 · 팔은 몸에서 주먹 하나 · 머리부터 발끝까지 화면 가득).')
             garment_in = gr.Image(label='옷 사진', type='pil', height=400)
+            garment_status_out = gr.Markdown()
             cloth_in = gr.Radio(
                 choices=list(CLOTH_LABELS.keys()),
                 value='상의',
@@ -250,10 +277,14 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                 )
                 seed_in = gr.Number(value=DEFAULT_SEED, precision=0,
                                     label='시드 (-1이면 매번 랜덤. 결과가 어색하면 바꿔서 다시)')
+                candidates_in = gr.Slider(
+                    1, 4, value=1, step=1,
+                    label='후보 장수 (시드를 하나씩 바꿔 여러 장 뽑고 고른다. 장수만큼 오래 걸린다)',
+                )
             run_btn = gr.Button('피팅 해보기', variant='primary')
 
         with gr.Column():
-            result_out = gr.Image(label='합성 결과', height=520)
+            result_out = gr.Gallery(label='합성 결과', height=520, columns=2, object_fit='contain')
             info_out = gr.Markdown()
             size_out = gr.Markdown(label='사이즈 추천')
 
@@ -261,11 +292,15 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
     # 사진을 올리는 순간 검사한다 (합성 한 장에 2분이라 미리 걸러야 한다)
     person_in.change(fn=photo_status, inputs=[person_in], outputs=[photo_status_out])
+    # 옷 사진도 올리는 순간 검사한다. 사진 종류(상품/착용)에 따라 기준이 달라 둘 다 연결한다
+    garment_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in], outputs=[garment_status_out])
+    garment_photo_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in],
+                            outputs=[garment_status_out])
 
     run_btn.click(
         fn=run,
         inputs=[person_in, garment_in, cloth_in, garment_photo_in, ignore_check_in,
-                steps_in, guidance_in, seed_in,
+                steps_in, guidance_in, seed_in, candidates_in,
                 chart_in, height_in, shoulder_in, chest_in, waist_in, hip_in],
         outputs=[result_out, size_out, info_out],
     )

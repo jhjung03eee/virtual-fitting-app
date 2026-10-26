@@ -44,7 +44,8 @@ from fashn_core import (try_on, load_models, warmup, FASHN_REPO,
                         DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
 from garment_check import check_garment
-from photo_check import check_photo
+from photo_check import check_photo, run_pose
+from photo_guide import draw_guide
 from reference_fit import ReferenceGarment, recommend_by_reference
 from size_fit import SizeChart, ko, recommend
 
@@ -189,16 +190,22 @@ def photo_status(person):
     포즈 인식(mediapipe)이 없거나 실패하면 photo_check 가 경고만 남기고 넘어간다.
     """
     if person is None:
-        return ''
-    check = check_photo(person)
+        return '', None
+    # 포즈를 한 번만 돌려 검사와 그림에 같이 쓴다. 따로 돌리면 느리고 둘이 어긋날 수 있다
+    try:
+        landmarks, seg_mask = run_pose(person)
+    except Exception:  # mediapipe 미설치 등 — check_photo 가 스스로 경고를 남긴다
+        landmarks = seg_mask = None
+    check = check_photo(person, landmarks, seg_mask)
+    guide = draw_guide(person, landmarks, check) if landmarks else None
     if check.ok and not check.warnings:
-        return '✅ ' + check.message()
+        return '✅ ' + check.message(), guide
     mark = '❌' if check.errors else '⚠️'
     lines = [f'{mark} ' + line for line in check.message().splitlines()]
     if check.errors:
         lines.append('')
         lines.append('다시 찍기 어렵다면 아래 **사진 검사 무시하고 합성**을 켜고 진행할 수 있어요 (결과가 나빠질 수 있어요).')
-    return '\n\n'.join(lines)
+    return '\n\n'.join(lines), guide
 
 
 def garment_status(garment, garment_photo_label):
@@ -278,6 +285,9 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
             photo_status_out = gr.Markdown(
                 '인물 사진을 올리면 자세·거리를 먼저 검사해요 '
                 '(정면 · 팔은 몸에서 주먹 하나 · 머리부터 발끝까지 화면 가득).')
+            # 초록 = 통과, 빨강 = 다시 찍기. 노란 막대 = 필요한 코~발목 길이, 그 옆 막대 = 사진 속 길이 (app/photo_guide.py)
+            photo_guide_out = gr.Image(label='사진 검사 (초록 통과 · 빨강 다시 찍기 · 노랑 필요한 길이)',
+                                       type='pil', height=400, interactive=False)
             garment_in = gr.Image(label='옷 사진', type='pil', height=400)
             garment_status_out = gr.Markdown()
             cloth_in = gr.Radio(
@@ -349,7 +359,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
     # 사진을 올리는 순간 검사한다 (합성 한 장에 2분이라 미리 걸러야 한다)
-    person_in.change(fn=photo_status, inputs=[person_in], outputs=[photo_status_out])
+    person_in.change(fn=photo_status, inputs=[person_in], outputs=[photo_status_out, photo_guide_out])
     # 옷 사진도 올리는 순간 검사한다. 사진 종류(상품/착용)에 따라 기준이 달라 둘 다 연결한다
     garment_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in], outputs=[garment_status_out])
     garment_photo_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in],

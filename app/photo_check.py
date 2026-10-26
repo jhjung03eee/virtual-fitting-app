@@ -52,6 +52,20 @@ class PhotoCheck:
         return '\n'.join(lines)
 
 
+def run_pose(image):
+    """포즈를 한 번 돌려 (landmarks, seg_mask) 를 돌려준다. 실패하면 예외를 그대로 올린다.
+
+    `check_photo` 와 `photo_guide.draw_guide` 가 **같은 결과**를 쓰도록 분리했다.
+    각자 돌리면 사진 한 장에 포즈를 두 번 돌리게 되고(느리다), 판정과 그림이 어긋날 수도 있다.
+    """
+    from body_measure import _run_pose
+    # 폰 원본(3024x4032)을 그대로 넣으면 mediapipe가 segfault로 죽었다.
+    # 랜드마크는 0~1 정규화 좌표라 줄인 사진으로 돌려도 원본에 그대로 쓸 수 있다.
+    small = image.convert('RGB')
+    small.thumbnail((POSE_MAX_SIDE, POSE_MAX_SIDE))
+    return _run_pose(np.array(small))
+
+
 def check_photo(image, landmarks=None, seg_mask=None) -> PhotoCheck:
     """image: PIL 이미지(EXIF 회전 적용된 것). landmarks/seg_mask 를 주면 포즈를 다시 돌리지 않는다."""
     check = PhotoCheck()
@@ -64,12 +78,7 @@ def check_photo(image, landmarks=None, seg_mask=None) -> PhotoCheck:
 
     if landmarks is None:
         try:
-            from body_measure import _run_pose
-            # 폰 원본(3024x4032)을 그대로 넣으면 mediapipe가 segfault로 죽었다.
-            # 랜드마크는 0~1 정규화 좌표라 줄인 사진으로 돌려도 원본에 그대로 쓸 수 있다.
-            small = image.convert('RGB')
-            small.thumbnail((POSE_MAX_SIDE, POSE_MAX_SIDE))
-            landmarks, seg_mask = _run_pose(np.array(small))
+            landmarks, seg_mask = run_pose(image)
         except Exception as e:  # mediapipe 미설치·모델 다운로드 실패
             check.warnings.append(f'자세 검사를 건너뛰었어요 ({type(e).__name__}).')
             return check

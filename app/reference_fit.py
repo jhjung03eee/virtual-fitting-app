@@ -22,38 +22,31 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from size_fit import SizeChart, ko
+from size_fit import SIZE_DIMENSIONS, SizeChart, ko, size_dimensions
 
 # 항목별 "거의 같음"으로 볼 차이(cm). 옷을 손으로 재면 1cm 안팎은 측정 오차다.
 # 기장 항목은 재는 위치가 조금만 달라도 차이가 커서 더 넓게 잡는다.
-SAME_TOLERANCE = {
-    'chest': 1.0, 'shoulder': 1.0, 'waist': 1.0, 'hip': 1.0, 'thigh': 1.0,
-    'hem': 1.0, 'cuff': 1.0, 'armhole': 1.0,
-    'length': 2.0, 'sleeve': 2.0, 'rise': 1.5,
-}
+# 판정 항목은 size_fit.SIZE_DIMENSIONS (상의 총장·어깨·가슴, 하의 총장·허리)
+SAME_TOLERANCE = {'chest': 1.0, 'shoulder': 1.0, 'waist': 1.0, 'length': 2.0}
 DEFAULT_SAME_TOLERANCE = 1.0
 # 이 배수를 넘으면 '조금'이 아니라 확실히 크거나 작다.
 CLEAR_MULTIPLIER = 3.0
 
 # 추천 점수에서 항목별 중요도. size_fit.DIMENSION_WEIGHT 와 같은 생각이다:
-# 가슴·허리가 맞아야 입을 수 있고, 기장·소매는 취향 차이가 크다.
-WEIGHT = {
-    'chest': 1.0, 'waist': 1.0, 'hip': 0.8, 'shoulder': 0.6, 'thigh': 0.5,
-    'length': 0.3, 'sleeve': 0.3, 'rise': 0.3, 'hem': 0.2, 'cuff': 0.1, 'armhole': 0.3,
-}
+# 가슴·허리가 맞아야 입을 수 있고, 기장은 취향 차이가 크다.
+WEIGHT = {'chest': 1.0, 'waist': 1.0, 'shoulder': 0.6, 'length': 0.3}
 DEFAULT_WEIGHT = 0.2
 
 # 기준 옷보다 작은 쪽은 큰 쪽보다 나쁘다(작으면 못 입고, 크면 입을 수는 있다).
 # 둘레 항목에서 기준보다 작을 때 차이에 이 배수를 곱한다.
-TIGHT_DIMENSIONS = ('chest', 'waist', 'hip', 'thigh')
+TIGHT_DIMENSIONS = ('chest', 'waist')
 TIGHT_PENALTY = 1.5
 
 # 종합 판정(작음/맞음/큼)에 쓰는 항목. 검증 스크립트(scripts/eval_size_fit.py)가
 # 사람이 느낀 착용감과 비교하는 값이다.
-VERDICT_DIMENSIONS = {
-    'upper': ('chest', 'shoulder', 'length'),
-    'lower': ('waist', 'hip', 'thigh', 'length'),
-}
+VERDICT_DIMENSIONS = SIZE_DIMENSIONS
+# 빠지면 추천이 크게 흔들리는 항목 — 없으면 재서 넣으라고 안내한다
+KEY_DIMENSION = {'upper': 'chest', 'lower': 'waist'}
 # 가중 평균 차이가 이 범위 밖이면 작음/큼. 큰 쪽을 더 너그럽게 둔다(TIGHT_PENALTY와 같은 이유).
 # 초기값이다 — 팀원 착용 기록으로 보정한다(docs/PLAN.md).
 VERDICT_SMALL_BELOW = -1.5
@@ -148,8 +141,9 @@ def compare_size(chart: SizeChart, size: str, ref: ReferenceGarment) -> SizeComp
     """한 사이즈를 기준 옷과 항목별로 비교한다."""
     diffs: List[DimensionDiff] = []
     score = 0.0
+    used = SIZE_DIMENSIONS.get(chart.category, ())
     for dimension, garment_cm in sorted(chart.sizes[size].items()):
-        if dimension not in ref.dims:
+        if dimension not in used or dimension not in ref.dims:
             continue
         diff = garment_cm - ref.dims[dimension]
         diffs.append(DimensionDiff(
@@ -175,21 +169,22 @@ def recommend_by_reference(chart: SizeChart, ref: ReferenceGarment) -> Reference
         return ReferenceRecommendation(best=None, notes=[
             '기준 옷과 새 옷의 종류(상의/하의)가 다릅니다. 같은 종류의 옷을 기준으로 넣어주세요.'])
 
-    common = [d for d in chart.dimensions() if d in ref.dims]
+    dims = size_dimensions(chart)
+    common = [d for d in dims if d in ref.dims]
     if not common:
         return ReferenceRecommendation(best=None, notes=[
             '기준 옷 치수와 치수표에 공통 항목이 없습니다. '
-            f"치수표 항목: {', '.join(ko(d) for d in chart.dimensions())}"])
+            f"치수표 항목: {', '.join(ko(d) for d in dims)}"])
 
-    missing = [d for d in chart.dimensions() if d not in ref.dims]
+    missing = [d for d in dims if d not in ref.dims]
     if missing:
         notes.append(f"기준 옷에서 재지 않아 비교하지 못한 항목: {', '.join(ko(d) for d in missing)}")
-    unused = [d for d in sorted(ref.dims) if d not in chart.dimensions()]
+    unused = [d for d in sorted(ref.dims) if d not in dims]
     if unused:
-        notes.append(f"이 치수표에 없는 항목이라 사용하지 않았습니다: {', '.join(ko(d) for d in unused)}")
-    main = VERDICT_DIMENSIONS.get(chart.category, ())
-    if main and not any(d in common for d in main[:1]):
-        notes.append(f'{ko(main[0])}를 재서 넣으면 추천이 더 정확해집니다.')
+        notes.append(f"이 치수표에 없거나 사이즈 판정에 쓰지 않는 항목이라 사용하지 않았습니다: {', '.join(ko(d) for d in unused)}")
+    key = KEY_DIMENSION.get(chart.category)
+    if key and key in dims and key not in common:
+        notes.append(f'{ko(key)}을 재서 넣으면 추천이 더 정확해집니다.')
 
     ranked = sorted((compare_size(chart, size, ref) for size in chart.sizes),
                     key=lambda c: c.score)

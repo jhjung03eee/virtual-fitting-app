@@ -108,11 +108,27 @@ class TestRecommend(unittest.TestCase):
         self.assertTrue(any('제외한 항목' in n for n in rec.notes))
 
     def test_notes_use_korean_dimension_names(self):
-        """안내 문구에 'length'라고 적히면 무슨 항목인지 알 수 없다."""
+        """안내 문구에 'shoulder'라고 적히면 무슨 항목인지 알 수 없다."""
         rec = recommend(UPPER, {'chest': 47.0})
         note = next(n for n in rec.notes if '제외한 항목' in n)
-        self.assertIn('총장', note)
-        self.assertNotIn('length', note)
+        self.assertIn('어깨너비', note)
+        self.assertNotIn('shoulder', ' '.join(rec.notes))
+
+    def test_length_is_only_noted(self):
+        """총장은 몸에 대응하는 치수가 없다 — 판정에서 빼고 기준 옷 방식에서 본다고 안내한다."""
+        rec = recommend(UPPER, {'chest': 47.0, 'shoulder': 44.0})
+        self.assertNotIn('length', [d.dimension for d in rec.best.dimensions])
+        self.assertTrue(any('총장' in n and '내 옷' in n for n in rec.notes))
+
+    def test_only_size_dimensions_are_used(self):
+        """판정 항목(2026-10-26): 상의 총장·어깨·가슴, 하의 총장·허리. 소매·엉덩이는 치수표에 있어도 안 쓴다."""
+        upper = SizeChart(name='소매 있는 티', category='upper', sizes={
+            'M': {'chest': 52.0, 'shoulder': 45.0, 'sleeve': 20.0}})
+        dims = [d.dimension for d in recommend(upper, {'chest': 48.0, 'shoulder': 44.0}).best.dimensions]
+        self.assertEqual(dims, ['chest', 'shoulder'])
+        lower = recommend(LOWER, {'waist': 36.0, 'hip': 48.0})
+        self.assertEqual([d.dimension for d in lower.best.dimensions], ['waist'])
+        self.assertTrue(any('엉덩이단면' in n and '사용하지 않았습니다' in n for n in lower.notes))
 
     def test_unused_body_input_is_noted(self):
         """치수표에 없는 항목을 입력하면 조용히 버리지 말고 알려야 한다.

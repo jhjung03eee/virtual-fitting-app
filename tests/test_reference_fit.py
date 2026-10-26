@@ -110,8 +110,20 @@ class TestRecommendByReference(unittest.TestCase):
         self.assertEqual(recommend_by_reference(UPPER, ref).best.size, 'L')
 
     def test_lower(self):
-        ref = ReferenceGarment('lower', {'waist': 38.5, 'hip': 52.0})
+        ref = ReferenceGarment('lower', {'waist': 38.5, 'length': 102.0})
         self.assertEqual(recommend_by_reference(LOWER, ref).best.size, 'M')
+
+    def test_hip_is_not_used(self):
+        """하의 판정은 총장·허리만(2026-10-26). 엉덩이는 치수표·기준 옷에 있어도 안 쓴다."""
+        ref = ReferenceGarment('lower', {'waist': 38.0, 'hip': 60.0})   # 엉덩이만 크게 다름
+        rec = recommend_by_reference(LOWER, ref)
+        self.assertEqual(rec.best.size, 'M')
+        self.assertEqual([d.dimension for d in rec.best.diffs], ['waist'])
+
+    def test_upper_uses_length_shoulder_chest(self):
+        ref = ReferenceGarment('upper', {'chest': 52.0, 'shoulder': 45.0, 'length': 68.0})
+        dims = [d.dimension for d in recommend_by_reference(UPPER, ref).best.diffs]
+        self.assertEqual(dims, ['chest', 'length', 'shoulder'])
 
     def test_category_mismatch(self):
         ref = ReferenceGarment('lower', {'waist': 38.0})

@@ -31,8 +31,9 @@ from reference_fit import VERDICTS  # noqa: E402
 from size_fit import SizeChart, evaluate_size  # noqa: E402
 
 EVAL_DIR = os.path.join(ROOT, 'data', 'fit_eval')
-GARMENT_DIMS = ('shoulder', 'chest', 'length', 'sleeve', 'waist', 'hip', 'thigh')
-MAIN_DIMENSION = {'upper': ('chest', 'shoulder'), 'lower': ('waist', 'hip')}
+# 사이즈 판정 항목(size_fit.SIZE_DIMENSIONS, 2026-10-26): 상의 총장·어깨·가슴, 하의 총장·허리
+GARMENT_DIMS = ('shoulder', 'chest', 'length', 'waist')
+MAIN_DIMENSION = {'upper': ('chest', 'shoulder'), 'lower': ('waist',)}
 BODY_LABEL_TO_VERDICT = {
     '작음': '작음', '타이트': '맞음', '레귤러': '맞음', '루즈': '큼', '오버핏': '큼',
 }

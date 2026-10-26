@@ -39,13 +39,14 @@ FIT_BANDS = {
             (2.0, 5.0, '레귤러'),
             (5.0, 99.0, '루즈'),
         ],
-        'hip': [
-            (-99.0, 0.0, '작음'),
-            (0.0, 3.0, '타이트'),
-            (3.0, 8.0, '레귤러'),
-            (8.0, 99.0, '루즈'),
-        ],
     },
+}
+
+# 사이즈 판정에 쓰는 항목 (2026-10-26 결정). 치수표에 소매·엉덩이·허벅지·밑위가 있어도 쓰지 않는다.
+# 총장은 몸에 대응하는 치수가 없어 이 모듈(몸 치수 비교)에서는 비교하지 못하고, 기준 옷 비교(reference_fit)에서만 쓴다.
+SIZE_DIMENSIONS = {
+    'upper': ('length', 'shoulder', 'chest'),
+    'lower': ('length', 'waist'),
 }
 
 # 추천 점수를 매길 때 어떤 항목을 얼마나 중요하게 볼지.
@@ -54,15 +55,20 @@ DIMENSION_WEIGHT = {
     'chest': 1.0,
     'shoulder': 0.6,
     'waist': 1.0,
-    'hip': 0.8,
     'length': 0.3,
 }
 
 # '가장 좋은 핏'으로 볼 여유분 목표치 (단면 cm). 점수는 이 값과의 거리로 계산한다.
 IDEAL_EASE = {
     'upper': {'chest': 5.0, 'shoulder': 0.5, 'length': 0.0},
-    'lower': {'waist': 3.0, 'hip': 5.0, 'length': 0.0},
+    'lower': {'waist': 3.0, 'length': 0.0},
 }
+
+
+def size_dimensions(chart) -> List[str]:
+    """이 치수표에서 사이즈 판정에 쓰는 항목 (SIZE_DIMENSIONS ∩ 치수표 항목)."""
+    used = SIZE_DIMENSIONS.get(chart.category, ())
+    return [d for d in chart.dimensions() if d in used]
 
 # 사용자에게 보여줄 때 쓰는 항목 이름. 안내 문구에 'length'라고 적히면
 # 무슨 항목인지 알 수 없다.
@@ -79,7 +85,7 @@ def ko(dimension: str) -> str:
 
 
 # 이 항목들은 "작으면 못 입는다"에 해당해 음수 여유분에 큰 벌점을 준다.
-HARD_LIMIT_DIMENSIONS = ('chest', 'waist', 'hip')
+HARD_LIMIT_DIMENSIONS = ('chest', 'waist')
 UNDERSIZE_PENALTY = 3.0
 
 
@@ -164,9 +170,10 @@ def evaluate_size(chart: SizeChart, size: str, body_cm: Dict[str, float]) -> Siz
     score = 0.0
     wearable = True
 
+    used = SIZE_DIMENSIONS.get(chart.category, ())
     for dimension, garment_cm in sorted(row.items()):
-        if dimension not in body_cm:
-            continue  # 몸 치수를 모르는 항목은 판정에서 뺀다
+        if dimension not in used or dimension not in body_cm:
+            continue  # 판정 항목이 아니거나 몸 치수를 모르는 항목은 뺀다
         ease = garment_cm - body_cm[dimension]
         dims.append(DimensionFit(
             dimension=dimension,
@@ -191,26 +198,29 @@ def recommend(chart: SizeChart, body_cm: Dict[str, float]) -> Recommendation:
     """치수표 전체를 평가해 가장 잘 맞는 사이즈를 고른다."""
     notes: List[str] = []
 
-    usable = [d for d in chart.dimensions() if d in body_cm]
+    dims = size_dimensions(chart)
+    usable = [d for d in dims if d in body_cm]
     if not usable:
         return Recommendation(best=None, ranked=[], notes=[
             '치수표와 몸 치수에 공통 항목이 없습니다. '
-            f'치수표 항목={chart.dimensions()}, 몸 치수 항목={sorted(body_cm)}'
+            f"치수표 항목: {', '.join(ko(d) for d in dims)} / 몸 치수 항목: {', '.join(ko(d) for d in sorted(body_cm))}"
         ])
 
-    missing = [d for d in chart.dimensions() if d not in body_cm]
+    missing = [d for d in dims if d not in body_cm and d != 'length']
     if missing:
         notes.append(
             f"몸 치수를 몰라 판정에서 제외한 항목: {', '.join(ko(d) for d in missing)}"
         )
+    if 'length' in dims:
+        notes.append('총장은 몸 치수로 비교할 수 없어, 잘 맞는 내 옷과 비교할 때만 봅니다.')
 
     # 반대 방향도 알려야 한다. 래글런 소매 상의처럼 치수표에 어깨너비가 아예
     # 없는 경우가 있는데, 사용자가 입력한 값이 조용히 버려지면
     # 왜 반영이 안 됐는지 알 수 없다.
-    unused = [d for d in sorted(body_cm) if d not in chart.dimensions()]
+    unused = [d for d in sorted(body_cm) if d not in dims]
     if unused:
         notes.append(
-            f"이 치수표에 없는 항목이라 사용하지 않았습니다: "
+            f"이 치수표에 없거나 사이즈 판정에 쓰지 않는 항목이라 사용하지 않았습니다: "
             f"{', '.join(ko(d) for d in unused)}"
         )
 

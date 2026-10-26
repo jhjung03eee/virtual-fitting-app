@@ -35,13 +35,13 @@ OFFLOAD = True   # T4 16GB + 1152x1536. 메모리가 넉넉한 GPU(A100 등)에�
 #   'bodyN'  : 직사각형 ∩ (사람 윤곽을 N px 넓힌 영역). 옷이 몸 바깥 배경으로 퍼질 자리를 없애 몸에 맞는 핏(정핏)을 유도한다.
 #              N은 인물 사진 가로 768px 기준(사진 크기에 비례해 조정). 세로 범위(기장)는 직사각형 그대로.
 # (묶음, 인물, 옷, category, 스텝, guidance, 시드, 해상도, 마스크) — F-15 시드 42와 같은 조건에 마스크만 바꾼다
+# G: 사이즈별 옷 사진(F-28, scripts/make_size_garments.py). FitDiT는 옷 사진 모양을 따라 그리므로(F-15·F-16)
+#    FASHN보다 사이즈 차이가 드러날 가능성이 크다. 마스크는 저자 기본(rect), 설정은 F-15와 같다.
+#    (F 묶음 — 마스크 자르기 — 은 git 기록에 있다)
 JOBS = []
-for person, garment, category in (('kakao_front_upper', 'sweatshirt_text', 'tops'),
-                                  ('kakao_front_upper', 'tee_orangutan', 'tops'),
-                                  ('kakao_front_upper', 'shirt_blue', 'tops'),
-                                  ('demo_person1_full', 'pants_corduroy', 'bottoms')):
-    for mask_mode in ('body8', 'body24'):
-        JOBS.append(('F', person, garment, category, 30, 2.0, 42, '1152x1536', mask_mode))
+for size in ('S', 'M', 'L', 'XL', 'XXL'):
+    for seed in (42, 123):
+        JOBS.append(('G', 'team02', f'tee_khaki_size_{size}', 'tops', 30, 2.0, seed, '1152x1536', 'rect'))
 
 
 def run(cmd):
@@ -227,6 +227,10 @@ for root, _dirs, files in os.walk('/kaggle/input'):
             found_g['pants_corduroy'] = path
         elif f == 'tshirts.jpg':
             found_g['tee_orangutan'] = path
+        elif f == 'person_team02.jpg':                  # 팀 공통 인물 (docs/MODEL_STUDY.md)
+            found_p['team02'] = path
+        elif f.startswith('garment_tee_khaki_size_'):   # vfa-size-garments (F-28)
+            found_g[os.path.splitext(f)[0][len('garment_'):]] = path
 print('인물:', sorted(found_p), '\n옷:', sorted(found_g), flush=True)
 need_p = {j[1] for j in JOBS}
 need_g = {j[2] for j in JOBS}

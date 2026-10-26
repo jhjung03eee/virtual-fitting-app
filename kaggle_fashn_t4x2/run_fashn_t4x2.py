@@ -7,7 +7,7 @@ Kaggle T4는 보통 2장이라, GPU마다 워커 프로세스를 하나씩 띄�
 다른 실험에 쓸 때는 맨 위 JOBS만 바꾼다. 한 줄 = 한 장.
 올릴 때: PYTHONUTF8=1 kaggle kernels push -p kaggle_fashn_t4x2 --accelerator NvidiaTeslaT4
 
-지금 JOBS: 팀 공통 조건(MODEL_STUDY.md)으로 FASHN 기준선 6장.
+지금 JOBS: 사이즈별 옷 사진(F-28) — 사이즈를 바꾼 옷 사진을 넣으면 결과 속 옷 크기도 그만큼 바뀌는가.
 """
 import csv
 import json
@@ -29,10 +29,13 @@ FIELDS = ['group', 'person', 'garment', 'category', 'steps', 'guidance', 'seed',
 COMPILE = True
 COMPILE_WARMUP = True
 MEASURE_PREPROCESS = False
+# N: 사이즈별 옷 사진(F-28, scripts/make_size_garments.py). 카키 반팔 원본을 M으로 보고 치수표 비율만큼
+#    옷 크기만 바꿨다(캔버스는 같음). 결과 속 옷 폭·기장이 사이즈 차이만큼 변하는지 잰다.
+#    시드 2개: 사이즈를 바꿨을 때의 변화가 시드만 바꿨을 때의 흔들림보다 커야 의미가 있다. 설정은 M(앱 기본값)과 같다.
 JOBS = []
-for garment, category in (('shirt_blue', 'tops'), ('tee_khaki', 'tops'), ('pants_forest', 'bottoms')):
+for size in ('S', 'M', 'L', 'XL', 'XXL'):
     for seed in (42, 123):
-        JOBS.append(('M', 'team02', garment, category, 25, 2.5, seed, 'fp16', 1))
+        JOBS.append(('N', 'team02', f'tee_khaki_size_{size}', 'tops', 25, 2.5, seed, 'fp16', 1))
 
 
 def run(cmd):
@@ -185,6 +188,8 @@ for root, _dirs, files in os.walk('/kaggle/input'):
             garments['pants_corduroy'] = path
         elif f == 'tshirts.jpg':
             garments['tee_orangutan'] = path
+        elif f.startswith('garment_tee_khaki_size_'):   # vfa-size-garments (F-28)
+            garments[os.path.splitext(f)[0][len('garment_'):]] = path
 print('인물:', sorted(persons), '\n옷:', sorted(garments), flush=True)
 need_p = {j[1] for j in JOBS}
 need_g = {j[2] for j in JOBS}

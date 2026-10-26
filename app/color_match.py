@@ -31,6 +31,15 @@ def garment_pixels(garment, tolerance=45.0, min_fraction=0.15):
     여유 있게 가르면서, 프레임에서 작게 찍힌 옷을 잘못 폴백시키지 않는다.
     """
     array = np.asarray(garment.convert('RGB'), dtype=np.float64)
+    foreground, _background = foreground_mask(garment, tolerance)
+    if foreground.mean() < min_fraction:
+        foreground = np.ones(array.shape[:2], dtype=bool)
+    return array[foreground]
+
+
+def foreground_mask(garment, tolerance=45.0):
+    """(옷 픽셀 bool 배열, 배경색 RGB). 배경색은 네 모서리의 중앙값이다(garment_pixels 설명 참고)."""
+    array = np.asarray(garment.convert('RGB'), dtype=np.float64)
     height, width = array.shape[:2]
     box_h, box_w = max(1, height // 20), max(1, width // 20)
     corners = np.concatenate([
@@ -40,11 +49,7 @@ def garment_pixels(garment, tolerance=45.0, min_fraction=0.15):
         array[-box_h:, -box_w:].reshape(-1, 3),
     ])
     background = np.median(corners, axis=0)
-
-    foreground = np.linalg.norm(array - background, axis=2) > tolerance
-    if foreground.mean() < min_fraction:
-        foreground = np.ones(array.shape[:2], dtype=bool)
-    return array[foreground]
+    return np.linalg.norm(array - background, axis=2) > tolerance, background
 
 
 def _robust_stats(values):

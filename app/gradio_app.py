@@ -46,7 +46,6 @@ from body_profile import BodyProfile
 from garment_check import check_garment
 from photo_check import check_photo, run_pose
 from photo_guide import draw_guide
-from reference_fit import ReferenceGarment, recommend_by_reference
 from size_fit import SizeChart, ko, recommend
 
 CLOTH_LABELS = {
@@ -126,56 +125,22 @@ def size_advice(chart_file, height, shoulder, chest, waist) -> str:
     if rec.best is None:
         return '**사이즈 추천 불가** — ' + ' '.join(rec.notes)
 
-    lines = [f'### {rec.message}', '', f'**{chart.name}** 기준', '',
-             '| 사이즈 | 항목별 여유분 | 입을 수 있음 |', '|---|---|---|']
+    lines = [f'### {rec.message}', '', f'**{chart.name}** 기준 · 레귤러핏 옷 기준 추천', '',
+             '| 사이즈 | 항목별 여유분 | 총장 | 입을 수 있음 |', '|---|---|---|---|']
     for fit in rec.ranked:
-        detail = ' / '.join(f'{d.dimension} {d.ease_cm:+.1f}cm ({d.label})'
+        detail = ' / '.join(f'{ko(d.dimension)} {d.ease_cm:+.1f}cm ({d.label})'
                             for d in fit.dimensions)
-        lines.append(f"| {fit.size} | {detail} | {'O' if fit.wearable else 'X'} |")
+        length = chart.sizes[fit.size].get('length')
+        length_txt = f'{length:g}cm' if length is not None else '-'
+        lines.append(f"| {fit.size} | {detail} | {length_txt} | {'O' if fit.wearable else 'X'} |")
     for note in rec.notes:
         lines.append(f'\n> {note}')
     return '\n'.join(lines)
 
 
-# 기준 옷 입력란 순서. run()·size_only()·화면의 입력 위젯 순서와 같아야 한다.
-# 사이즈 판정 항목(size_fit.SIZE_DIMENSIONS): 상의 총장·어깨·가슴, 하의 총장·허리
-REFERENCE_FIELDS = ('shoulder', 'chest', 'length', 'waist')
-
-
-def reference_advice(chart_file, *values) -> str:
-    """잘 맞는 내 옷(기준 옷)의 단면 치수와 새 옷 치수표를 비교한다 (app/reference_fit.py)."""
-    if not chart_file or not any(v not in (None, '', 0) for v in values):
-        return ''
-    chart = load_chart(chart_file)
-    ref = ReferenceGarment.from_inputs(chart.category, **dict(zip(REFERENCE_FIELDS, values)))
-    rec = recommend_by_reference(chart, ref)
-    if rec.best is None:
-        return '**기준 옷 비교 불가** — ' + ' '.join(rec.notes)
-
-    lines = [f'### 기준 옷 비교: {rec.message}', '',
-             '| 사이즈 | 기준 옷 대비 | 종합 |', '|---|---|---|']
-    for c in rec.ranked:
-        detail = ' / '.join(f'{ko(d.dimension)} {d.diff_cm:+.1f}cm ({d.label})' for d in c.diffs)
-        lines.append(f'| {c.size} | {detail} | {c.verdict} |')
-    for note in rec.notes:
-        lines.append(f'\n> {note}')
-    return '\n'.join(lines)
-
-
-def combined_advice(chart_file, height, shoulder, chest, waist, *ref_values) -> str:
-    """몸 치수 비교와 기준 옷 비교를 함께 보여준다. 기준 옷이 비어 있으면 몸 치수 결과만."""
-    by_reference = reference_advice(chart_file, *ref_values)
-    by_body = size_advice(chart_file, height, shoulder, chest, waist)
-    if not by_reference:
-        return by_body
-    return by_reference + '\n\n---\n\n#### 참고: 몸 치수로 본 결과\n\n' + by_body
-
-
-def size_only(chart_file, height, shoulder, chest, waist,
-              ref_shoulder, ref_chest, ref_length, ref_waist):
+def size_only(chart_file, height, shoulder, chest, waist):
     """합성 없이 사이즈 추천만 바로 보여준다 (합성은 한 장에 약 50초)."""
-    return combined_advice(chart_file, height, shoulder, chest, waist,
-                           ref_shoulder, ref_chest, ref_length, ref_waist)
+    return size_advice(chart_file, height, shoulder, chest, waist)
 
 
 GARMENT_PHOTO_LABELS = {
@@ -224,9 +189,7 @@ def garment_status(garment, garment_photo_label):
 
 def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
         steps, guidance_scale, seed, num_candidates,
-        chart_file, height, shoulder, chest, waist,
-        ref_shoulder, ref_chest, ref_length, ref_waist,
-        progress=gr.Progress()):
+        chart_file, height, shoulder, chest, waist, progress=gr.Progress()):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
 
@@ -235,8 +198,7 @@ def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
         if not check.ok:
             raise gr.Error(check.message() + '\n(그대로 해보려면 "사진 검사 무시하고 합성"을 켜세요)')
 
-    advice = combined_advice(chart_file, height, shoulder, chest, waist,
-                             ref_shoulder, ref_chest, ref_length, ref_waist)
+    advice = size_advice(chart_file, height, shoulder, chest, waist)
 
     # 같은 설정도 시드에 따라 결과가 갈린다(셔츠 6장 중 1장 실패, docs/PLAN.md F-19).
     # 여러 장을 뽑아 고르게 한다. 시드 -1이면 try_on 이 매번 다른 시드를 뽑는다.
@@ -304,7 +266,8 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
             with gr.Accordion('내 신체 치수 (사이즈 추천용)', open=True):
                 gr.Markdown(
                     '아는 항목만 넣어도 됩니다. **둘레**로 입력하면 치수표의 단면과 '
-                    '자동으로 맞춰 계산합니다 (가슴둘레 96 → 가슴단면 48).'
+                    '자동으로 맞춰 계산합니다 (가슴둘레 96 → 가슴단면 48). '
+                    '**레귤러핏 옷 기준**으로 추천해요 — 오버핏으로 나온 옷은 크게 추천될 수 있어요.'
                 )
                 height_in = gr.Number(value=175, label='키 (cm)')
                 shoulder_in = gr.Number(value=None, label='어깨너비 (cm, 폭)')
@@ -315,16 +278,6 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                     choices=_initial, value=(_initial or [None])[0],
                     label='옷 치수표 (선택한 옷 종류에 맞춰 자동 변경)',
                 )
-            with gr.Accordion('잘 맞는 내 옷과 비교 (기준 옷)', open=False):
-                gr.Markdown(
-                    '평소 **잘 맞는 옷 한 벌**을 바닥에 펴 놓고 줄자로 재서 넣으면, 새 옷에서 '
-                    '그 옷과 가장 비슷한 사이즈를 찾아요. 쇼핑몰 치수표와 같은 **단면**(옷의 폭)으로 '
-                    '재면 됩니다 (가슴단면 = 겨드랑이 아래 끝에서 끝까지). 같은 종류의 옷일수록 정확해요.'
-                )
-                ref_shoulder_in = gr.Number(value=None, label='어깨너비 (cm)')
-                ref_chest_in = gr.Number(value=None, label='가슴단면 (cm)')
-                ref_length_in = gr.Number(value=None, label='총장 (cm)')
-                ref_waist_in = gr.Number(value=None, label='허리단면 (cm, 하의)')
             size_btn = gr.Button('사이즈만 추천받기 (합성 없이 바로)')
 
             with gr.Accordion('고급 설정', open=False):
@@ -366,15 +319,12 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
         fn=run,
         inputs=[person_in, garment_in, cloth_in, garment_photo_in, ignore_check_in,
                 steps_in, guidance_in, seed_in, candidates_in,
-                chart_in, height_in, shoulder_in, chest_in, waist_in,
-                ref_shoulder_in, ref_chest_in, ref_length_in, ref_waist_in],
+                chart_in, height_in, shoulder_in, chest_in, waist_in],
         outputs=[result_out, size_out, info_out],
     )
     size_btn.click(
         fn=size_only,
-        # 기준 옷 입력은 REFERENCE_FIELDS 순서
-        inputs=[chart_in, height_in, shoulder_in, chest_in, waist_in,
-                ref_shoulder_in, ref_chest_in, ref_length_in, ref_waist_in],
+        inputs=[chart_in, height_in, shoulder_in, chest_in, waist_in],
         outputs=[size_out],
     )
 

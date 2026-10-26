@@ -115,10 +115,10 @@ class TestRecommend(unittest.TestCase):
         self.assertNotIn('shoulder', ' '.join(rec.notes))
 
     def test_length_is_only_noted(self):
-        """총장은 몸에 대응하는 치수가 없다 — 판정에서 빼고 기준 옷 방식에서 본다고 안내한다."""
+        """총장은 몸에 대응하는 치수가 없다 — 점수에서 빼고 치수표 값을 보여 준다고 안내한다(레귤러핏 기준)."""
         rec = recommend(UPPER, {'chest': 47.0, 'shoulder': 44.0})
         self.assertNotIn('length', [d.dimension for d in rec.best.dimensions])
-        self.assertTrue(any('총장' in n and '내 옷' in n for n in rec.notes))
+        self.assertTrue(any('총장' in n and '레귤러핏' in n for n in rec.notes))
 
     def test_only_size_dimensions_are_used(self):
         """판정 항목(2026-10-26): 상의 총장·어깨·가슴, 하의 총장·허리. 소매·엉덩이는 치수표에 있어도 안 쓴다."""

@@ -1,36 +1,35 @@
-"""사이즈 추천 정확도 측정 — 몸 치수 방식(size_fit) vs 기준 옷 방식(reference_fit).
+"""사이즈 추천 정확도 측정 — 신체 치수 방식(app/size_fit.py).
 
-팀원이 실제로 입어 본 옷의 치수와 착용감(작음/맞음/큼)을 정답으로 두고,
-두 방식이 그 착용감을 몇 % 맞히는지 잰다. 입력 양식은 data/fit_eval/README.md.
+팀원이 실제로 입어 본 옷의 치수와 착용감(작음/맞음/큼)을 정답으로 두고, 신체 치수로 그 착용감을
+몇 % 맞히는지 잰다. 입력 양식은 data/fit_eval/README.md. 추천은 **신체 정보만** 쓴다(2026-10-26 결정,
+기준 옷 비교 방식은 뺐다 — docs/PLAN.md F-30).
 
     python scripts/eval_size_fit.py                    # data/fit_eval/people.csv, garments.csv
-    python scripts/eval_size_fit.py --sweep            # 기준 옷 판정 경계값별 정확도도 출력
+    python scripts/eval_size_fit.py --sweep            # 주 항목 여유분의 작음·큼 경계값별 정확도도 출력
 
-**예측 방법**
-  - 몸 치수: 옷 한 벌(입은 사이즈)의 여유분 = 옷 단면 - 몸 단면. 주 항목(상의 가슴, 하의 허리)의
-    핏 라벨을 작음/맞음/큼으로 묶는다 (BODY_LABEL_TO_VERDICT).
-  - 기준 옷: 같은 사람이 '맞음'이라고 한 **다른** 옷(같은 종류)을 기준으로 놓고 판정한다.
-    기준 후보가 여러 벌이면 (대상, 기준) 쌍마다 한 번씩 센다. 자기 자신은 기준에서 뺀다.
+**예측 방법**: 옷 한 벌(입은 사이즈)의 여유분 = 옷 단면 − 몸 단면. 주 항목(상의 가슴→어깨, 하의 허리)의
+핏 라벨을 작음/맞음/큼으로 묶는다(BODY_LABEL_TO_VERDICT). 레귤러핏 옷 기준이므로 오버핏으로 나온 옷은
+기록에서 빼거나 material 칸에 적어 따로 본다.
 
---sweep 결과는 **같은 데이터로 경계값을 고르는 것이라 낙관적**이다. 기록이 쌓이면 사람 단위로
-나눠(한 명 빼고 고른 값을 그 사람에게 적용) 다시 재야 한다.
+--sweep 은 주 항목 여유분을 직접 경계값으로 잘라(작음 < a, 큼 > b) 정확도가 가장 높은 구간을 찾는다.
+`size_fit.FIT_BANDS` 의 레귤러 구간(가슴 +3~7cm 등)을 보정하는 근거가 된다. **같은 데이터로 고르는 것이라
+낙관적**이다 — 기록이 쌓이면 사람 단위로 나눠(한 명 빼고 고른 값을 그 사람에게 적용) 다시 재야 한다.
 """
 import argparse
 import csv
 import os
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'app'))
 
-import reference_fit  # noqa: E402
 from body_profile import BodyProfile  # noqa: E402
-from reference_fit import VERDICTS  # noqa: E402
 from size_fit import SizeChart, evaluate_size  # noqa: E402
 
 EVAL_DIR = os.path.join(ROOT, 'data', 'fit_eval')
+VERDICTS = ('작음', '맞음', '큼')
 # 사이즈 판정 항목(size_fit.SIZE_DIMENSIONS, 2026-10-26): 상의 총장·어깨·가슴, 하의 총장·허리
 GARMENT_DIMS = ('shoulder', 'chest', 'length', 'waist')
 MAIN_DIMENSION = {'upper': ('chest', 'shoulder'), 'lower': ('waist',)}
@@ -54,7 +53,6 @@ def load_people(path) -> Dict[str, Dict[str, float]]:
                 shoulder_cm=_num(row.get('shoulder_cm')),
                 chest_circumference_cm=_num(row.get('chest_circumference_cm')),
                 waist_circumference_cm=_num(row.get('waist_circumference_cm')),
-                hip_circumference_cm=_num(row.get('hip_circumference_cm')),
             )
             people[row['person'].strip()] = profile.to_chart_dimensions()
     return people
@@ -83,8 +81,16 @@ def load_garments(path) -> List[dict]:
     return garments
 
 
+def main_ease(garment: dict, body: Dict[str, float]) -> Optional[Tuple[str, float]]:
+    """주 항목 (이름, 여유분). 비교할 수 없으면 None."""
+    for dim in MAIN_DIMENSION[garment['category']]:
+        if dim in garment['dims'] and dim in body:
+            return dim, garment['dims'][dim] - body[dim]
+    return None
+
+
 def predict_by_body(garment: dict, body: Dict[str, float]) -> Optional[str]:
-    """몸 치수 방식. 주 항목을 비교할 수 없으면 None(측정 불가)."""
+    """신체 치수 방식(size_fit 의 핏 라벨). 주 항목을 비교할 수 없으면 None(측정 불가)."""
     chart = SizeChart(name=garment['garment'], category=garment['category'],
                       sizes={'worn': garment['dims']})
     labels = {d.dimension: d.label for d in evaluate_size(chart, 'worn', body).dimensions}
@@ -92,24 +98,6 @@ def predict_by_body(garment: dict, body: Dict[str, float]) -> Optional[str]:
         if dim in labels and labels[dim] in BODY_LABEL_TO_VERDICT:
             return BODY_LABEL_TO_VERDICT[labels[dim]]
     return None
-
-
-def predict_by_reference(garment: dict, ref: dict) -> Optional[str]:
-    common = {d: garment['dims'][d] - ref['dims'][d] for d in garment['dims'] if d in ref['dims']}
-    if not common:
-        return None
-    return reference_fit.verdict(garment['category'], common)
-
-
-def reference_pairs(garments: List[dict]) -> List[Tuple[dict, dict]]:
-    """(대상 옷, 기준 옷) 쌍. 기준은 같은 사람·같은 종류·'맞음'인 다른 옷."""
-    pairs = []
-    for target in garments:
-        for ref in garments:
-            if (ref is not target and ref['person'] == target['person']
-                    and ref['category'] == target['category'] and ref['felt'] == '맞음'):
-                pairs.append((target, ref))
-    return pairs
 
 
 def score(results: List[Tuple[str, str]]) -> dict:
@@ -121,47 +109,35 @@ def score(results: List[Tuple[str, str]]) -> dict:
 
 
 def evaluate(people, garments) -> dict:
-    body_results, body_skipped = [], 0
+    body_results, skipped = [], 0
     for g in garments:
         pred = predict_by_body(g, people.get(g['person'], {}))
         if pred is None:
-            body_skipped += 1
+            skipped += 1
         else:
             body_results.append((g['felt'], pred))
-
-    ref_results, same_material = [], []
-    for target, ref in reference_pairs(garments):
-        pred = predict_by_reference(target, ref)
-        if pred is None:
-            continue
-        ref_results.append((target['felt'], pred))
-        if target['material'] and target['material'] == ref['material']:
-            same_material.append((target['felt'], pred))
-
     return {
-        'body': dict(score(body_results), skipped=body_skipped),
-        'reference': score(ref_results),
-        'reference_same_material': score(same_material),
+        'body': dict(score(body_results), skipped=skipped),
         'baseline': score([(g['felt'], '맞음') for g in garments]),
     }
 
 
-def sweep(garments) -> List[Tuple[float, float, float, int]]:
-    """기준 옷 판정 경계값(작음 아래·큼 위)별 정확도. 낙관적 추정이다(모듈 설명 참고)."""
-    pairs = reference_pairs(garments)
-    saved = (reference_fit.VERDICT_SMALL_BELOW, reference_fit.VERDICT_LARGE_ABOVE)
+def sweep(people, garments, category='upper') -> List[Tuple[float, float, float, int]]:
+    """주 항목 여유분을 (작음 < a, 큼 > b)로 잘랐을 때의 정확도. 낙관적 추정이다(모듈 설명 참고)."""
+    points = []
+    for g in garments:
+        if g['category'] != category:
+            continue
+        hit = main_ease(g, people.get(g['person'], {}))
+        if hit:
+            points.append((g['felt'], hit[1]))
     rows = []
-    try:
-        for small in (-3.0, -2.5, -2.0, -1.5, -1.0, -0.5):
-            for large in (1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0):
-                reference_fit.VERDICT_SMALL_BELOW, reference_fit.VERDICT_LARGE_ABOVE = small, large
-                results = [(t['felt'], p) for t, r in pairs
-                           if (p := predict_by_reference(t, r)) is not None]
-                s = score(results)
-                if s['n']:
-                    rows.append((small, large, s['accuracy'], s['n']))
-    finally:
-        reference_fit.VERDICT_SMALL_BELOW, reference_fit.VERDICT_LARGE_ABOVE = saved
+    for a in (-2.0, -1.0, 0.0, 1.0, 2.0, 3.0):
+        for b in (4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0):
+            results = [(felt, '작음' if e < a else '큼' if e > b else '맞음') for felt, e in points]
+            s = score(results)
+            if s['n']:
+                rows.append((a, b, s['accuracy'], s['n']))
     return sorted(rows, key=lambda r: -r[2])
 
 
@@ -192,16 +168,18 @@ def main(argv=None):
 
     print(f'사람 {len(people)}명 · 옷 {len(garments)}벌 · 착용감 {dict(Counter(g["felt"] for g in garments))}\n')
     print(format_score('기준선 (전부 "맞음"으로 찍기)', result['baseline']))
-    print(format_score('몸 치수 방식', result['body']))
+    print(format_score('신체 치수 방식', result['body']))
     if result['body']['skipped']:
         print(f"    (몸 치수·주 항목이 없어 뺀 옷 {result['body']['skipped']}벌)")
-    print(format_score('기준 옷 방식 (대상·기준 쌍)', result['reference']))
-    print(format_score('  └ 소재가 같은 쌍만', result['reference_same_material']))
 
     if args.sweep:
-        print('\n기준 옷 판정 경계값별 정확도 (상위 10개, 같은 데이터로 골라 낙관적):')
-        for small, large, acc, n in sweep(garments)[:10]:
-            print(f'  작음 < {small:+.1f}  큼 > {large:+.1f}  →  {acc:.0%} (n={n})')
+        for category, name in (('upper', '상의 가슴(없으면 어깨)'), ('lower', '하의 허리')):
+            rows = sweep(people, garments, category)
+            if not rows:
+                continue
+            print(f'\n{name} 여유분 경계값별 정확도 (상위 5개, 같은 데이터로 골라 낙관적):')
+            for a, b, acc, n in rows[:5]:
+                print(f'  작음 < {a:+.0f}cm  큼 > {b:+.0f}cm  →  {acc:.0%} (n={n})')
     return 0
 
 

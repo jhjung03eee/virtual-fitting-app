@@ -43,7 +43,8 @@ FIT_BANDS = {
 }
 
 # 사이즈 판정에 쓰는 항목 (2026-10-26 결정). 치수표에 소매·엉덩이·허벅지·밑위가 있어도 쓰지 않는다.
-# 총장은 몸에 대응하는 치수가 없어 이 모듈(몸 치수 비교)에서는 비교하지 못하고, 기준 옷 비교(reference_fit)에서만 쓴다.
+# 총장은 몸에 대응하는 치수가 없어 점수에 넣지 않는다. 추천은 레귤러핏 옷 기준(2026-10-26)이라
+# 가슴·어깨(하의는 허리)에 맞는 사이즈의 총장을 그대로 보여 준다(앱 결과 표).
 SIZE_DIMENSIONS = {
     'upper': ('length', 'shoulder', 'chest'),
     'lower': ('length', 'waist'),
@@ -212,7 +213,7 @@ def recommend(chart: SizeChart, body_cm: Dict[str, float]) -> Recommendation:
             f"몸 치수를 몰라 판정에서 제외한 항목: {', '.join(ko(d) for d in missing)}"
         )
     if 'length' in dims:
-        notes.append('총장은 몸 치수로 비교할 수 없어, 잘 맞는 내 옷과 비교할 때만 봅니다.')
+        notes.append('총장은 점수에 넣지 않고 치수표 값을 그대로 보여 줍니다 (레귤러핏 옷 기준).')
 
     # 반대 방향도 알려야 한다. 래글런 소매 상의처럼 치수표에 어깨너비가 아예
     # 없는 경우가 있는데, 사용자가 입력한 값이 조용히 버려지면

@@ -39,9 +39,11 @@ OFFLOAD = True   # T4 16GB + 1152x1536. 메모리가 넉넉한 GPU(A100 등)에�
 #    FASHN보다 사이즈 차이가 드러날 가능성이 크다. 마스크는 저자 기본(rect), 설정은 F-15와 같다.
 #    (F 묶음 — 마스크 자르기 — 은 git 기록에 있다)
 JOBS = []
-for size in ('S', 'M', 'L', 'XL', 'XXL'):
+# (G 묶음 — 사이즈별 옷 사진, F-28 — 은 git 기록에 있다)
+# H: 유니클로 실측(F-31). 옷 모양을 따르는 FitDiT와 FASHN을 실제 착용 사진과 함께 비교한다.
+for person in ('uniqlo_orig1', 'uniqlo_orig3'):
     for seed in (42, 123):
-        JOBS.append(('G', 'team02', f'tee_khaki_size_{size}', 'tops', 30, 2.0, seed, '1152x1536', 'rect'))
+        JOBS.append(('H', person, 'uniqlo_navy', 'tops', 30, 2.0, seed, '1152x1536', 'rect'))
 
 
 def run(cmd):
@@ -229,8 +231,10 @@ for root, _dirs, files in os.walk('/kaggle/input'):
             found_g['tee_orangutan'] = path
         elif f == 'person_team02.jpg':                  # 팀 공통 인물 (docs/MODEL_STUDY.md)
             found_p['team02'] = path
-        elif f.startswith('garment_tee_khaki_size_'):   # vfa-size-garments (F-28)
+        elif f.startswith('garment_tee_khaki_size_') or f == 'garment_uniqlo_navy.jpg':   # F-28 · F-31
             found_g[os.path.splitext(f)[0][len('garment_'):]] = path
+        elif f.startswith('person_uniqlo_'):            # vfa-uniqlo-test (F-31)
+            found_p[os.path.splitext(f)[0][len('person_'):]] = path
 print('인물:', sorted(found_p), '\n옷:', sorted(found_g), flush=True)
 need_p = {j[1] for j in JOBS}
 need_g = {j[2] for j in JOBS}

@@ -73,12 +73,16 @@ def garment_mask(result, frame):
     return np.asarray(mask) > 0
 
 
-def measure(result, frame):
-    """폭은 그 줄의 옷 픽셀 **개수**로 잰다 — 왼쪽 끝~오른쪽 끝으로 재면 바지 주름에 흩어진 점까지 폭이 된다."""
+def measure(result, frame, mask_fn=None):
+    """폭은 그 줄의 옷 픽셀 **개수**로 잰다 — 왼쪽 끝~오른쪽 끝으로 재면 바지 주름에 흩어진 점까지 폭이 된다.
+
+    mask_fn(result, frame) → bool 배열: 옷을 고르는 규칙. 기본은 카키(어두운 픽셀). 다른 옷이면 바꿔 끼운다
+    (유니클로 남색 반팔은 갈색 바지도 어두워서 색 규칙을 쓴다, scripts/measure_uniqlo.py).
+    """
     height = result.height
     shoulder_y, torso, _cx = frame
     sy, t = shoulder_y * height, torso * height
-    mask = garment_mask(result, frame)
+    mask = (mask_fn or garment_mask)(result, frame)
     counts = mask.sum(axis=1)
 
     chest_row = int(sy + CHEST_LEVEL * t)

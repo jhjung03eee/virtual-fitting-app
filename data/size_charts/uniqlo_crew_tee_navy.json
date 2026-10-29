@@ -1,0 +1,23 @@
+{
+  "name": "유니클로 크루넥 반팔 티 (네이비)",
+  "category": "upper",
+  "source": "구매한 상품의 사이즈 표 사진에서 옮긴 값 (2026-10-29), 실측 착용 실험 F-31",
+  "unit": "cm (단면)",
+  "sizes": {
+    "M": {
+      "length": 68.0,
+      "shoulder": 43.0,
+      "chest": 51.5
+    },
+    "L": {
+      "length": 71.0,
+      "shoulder": 44.5,
+      "chest": 54.5
+    },
+    "XL": {
+      "length": 74.0,
+      "shoulder": 46.5,
+      "chest": 58.5
+    }
+  }
+}

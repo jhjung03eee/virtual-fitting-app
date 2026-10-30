@@ -117,15 +117,32 @@ run([VENV_PY, '-u', os.path.join(REPO_DIR, 'scripts', 'hrviton_prep.py'),
      '--out', os.path.join(DATAROOT, 'test'), '--upper-crop', 'kakao'], env=env)
 
 os.makedirs(OUT, exist_ok=True)
-start = time.time()
-run([VENV_PY, '-u', os.path.join(HRV_DIR, 'test_generator.py'),
-     '--occlusion', '--cuda', 'True', '--gpu_ids', '0', '-j', '2',
-     '--test_name', 'vfa', '--dataroot', DATAROOT, '--datamode', 'test',
-     '--data_list', 'test_pairs.txt', '--datasetting', 'unpaired',
-     '--tocg_checkpoint', os.path.join(weights, 'mtviton.pth'),
-     '--gen_checkpoint', os.path.join(weights, 'gen.pth'),
-     '--output_dir', os.path.join(OUT, 'output')], cwd=OUT)
-print(f'HR-VITON 추론 전체 {time.time() - start:.1f}초 (모델 로딩 포함)', flush=True)
+
+
+def hrviton(data_list, output_dir):
+    start = time.time()
+    run([VENV_PY, '-u', os.path.join(HRV_DIR, 'test_generator.py'),
+         '--occlusion', '--cuda', 'True', '--gpu_ids', '0', '-j', '2',
+         '--test_name', 'vfa', '--dataroot', DATAROOT, '--datamode', 'test',
+         '--data_list', data_list, '--datasetting', 'unpaired',
+         '--tocg_checkpoint', os.path.join(weights, 'mtviton.pth'),
+         '--gen_checkpoint', os.path.join(weights, 'gen.pth'),
+         '--output_dir', output_dir], cwd=OUT)
+    return time.time() - start
+
+
+with open(os.path.join(DATAROOT, 'test_pairs.txt'), encoding='utf-8') as f:
+    pairs = [line for line in f if line.strip()]
+elapsed_all = hrviton('test_pairs.txt', os.path.join(OUT, 'output'))
+print(f'HR-VITON 추론 전체 {elapsed_all:.1f}초 (모델 로딩 포함, {len(pairs)}쌍)', flush=True)
+# 한 장 시간: 로딩은 같으므로 1쌍만 따로 돌려 빼 준다 (중간발표 표를 T4 기준으로 맞추기, F-32)
+with open(os.path.join(DATAROOT, 'test_pairs_one.txt'), 'w', encoding='utf-8') as f:
+    f.write(pairs[0])
+elapsed_one = hrviton('test_pairs_one.txt', os.path.join(OUT, 'output_one'))
+per_image = (elapsed_all - elapsed_one) / (len(pairs) - 1)
+print(f'HR-VITON 1쌍 {elapsed_one:.1f}초 → 한 장 약 {per_image:.2f}초 (로딩 제외)', flush=True)
+with open('/kaggle/working/hrviton_timing.txt', 'w', encoding='utf-8') as f:
+    f.write(f'pairs={len(pairs)} all_s={elapsed_all:.2f} one_s={elapsed_one:.2f} per_image_s={per_image:.3f}\n')
 
 for sub in ('output_warp', 'output_region'):
     print(sub, sorted(os.listdir(os.path.join(OUT, sub)))[:3], flush=True)

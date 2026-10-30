@@ -8,6 +8,7 @@ import glob
 import json
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -40,12 +41,13 @@ _gcu._json_schema_to_python_type = _safe_json_schema_to_python_type
 _gcu.get_type = _safe_get_type
 # -------------------------------------------------------------------------
 
-from fashn_core import (try_on, load_models, warmup, FASHN_REPO,
+from fashn_core import (try_on, load_models, warmup, FASHN_REPO, CATEGORY_BY_CLOTH_TYPE,
                         DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
 from garment_check import check_garment
 from photo_check import check_photo, run_pose
 from photo_guide import draw_guide
+from restore_original import restore_original
 from size_fit import SizeChart, ko, recommend
 
 CLOTH_LABELS = {
@@ -187,8 +189,25 @@ def garment_status(garment, garment_photo_label):
     return '\n\n'.join('⚠️ ' + line for line in check.message().splitlines())
 
 
+def postprocess(person, result, cloth_type):
+    """옷 자리만 합성 결과, 얼굴·손·배경은 원본으로 (app/restore_original.py, docs/PLAN.md F-25).
+
+    반환: (이미지, 안내 문구). 할 수 없으면 합성 결과를 그대로 돌려준다.
+    """
+    from PIL import ImageOps
+    person = ImageOps.exif_transpose(person).convert('RGB')
+    # FASHN 결과는 3:4. 원본 비율이 다르면 옷 자리가 어긋나므로 건너뛴다 (폰 세로 사진은 3:4)
+    if abs(person.width / person.height - result.width / result.height) > 0.02:
+        return result, '후처리 건너뜀 — 인물 사진이 3:4 비율이 아님'
+    start = time.perf_counter()
+    restored, mask = restore_original(person, result, CATEGORY_BY_CLOTH_TYPE[cloth_type])
+    if mask is None:
+        return result, '후처리 건너뜀 — 신체 부위 구분 모델(mediapipe)을 못 씀'
+    return restored, f'후처리 {time.perf_counter() - start:.1f}초'
+
+
 def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
-        steps, guidance_scale, seed, num_candidates,
+        steps, guidance_scale, seed, num_candidates, restore,
         chart_file, height, shoulder, chest, waist, progress=gr.Progress()):
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
@@ -203,23 +222,34 @@ def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
     # 같은 설정도 시드에 따라 결과가 갈린다(셔츠 6장 중 1장 실패, docs/PLAN.md F-19).
     # 여러 장을 뽑아 고르게 한다. 시드 -1이면 try_on 이 매번 다른 시드를 뽑는다.
     count = max(1, int(num_candidates))
-    gallery, seeds, seconds = [], [], []
+    cloth_type = CLOTH_LABELS[cloth_label]
+    gallery, seeds, seconds, notes = [], [], [], []
     for i in range(count):
         progress(i / count, desc=f'후보 {i + 1}/{count} 합성 중')
         result, timing = try_on(
             person=person,
             garment=garment,
-            cloth_type=CLOTH_LABELS[cloth_label],
+            cloth_type=cloth_type,
             garment_photo_type=GARMENT_PHOTO_LABELS[garment_photo_label],
             steps=int(steps),
             guidance_scale=float(guidance_scale),
             seed=int(seed) if int(seed) == -1 else int(seed) + i,
             return_timing=True,
         )
-        gallery.append((result, f"시드 {timing['seed']}"))
+        if restore:
+            progress((i + 0.9) / count, desc=f'후보 {i + 1}/{count} 후처리 중')
+            restored, note = postprocess(person, result, cloth_type)
+            notes.append(note)
+            gallery.append((restored, f"시드 {timing['seed']} · 후처리"))
+            if count == 1 and restored is not result:
+                gallery.append((result, '비교: 합성 그대로 (후처리 전)'))
+        else:
+            gallery.append((result, f"시드 {timing['seed']}"))
         seeds.append(str(timing['seed']))
         seconds.append(timing['total_s'])
     info = (f"{count}장 합성 · 장당 {sum(seconds) / count:.0f}초 · 시드 {', '.join(seeds)} · {timing['dtype']}")
+    if notes:
+        info += ' · ' + notes[-1]
     if count > 1:
         info += '\n\n마음에 드는 결과의 시드를 고급 설정에 넣으면 같은 결과를 다시 볼 수 있어요.'
     return gallery, advice, info
@@ -299,6 +329,10 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                     1, 4, value=1, step=1,
                     label='후보 장수 (시드를 하나씩 바꿔 여러 장 뽑고 고른다. 장수만큼 오래 걸린다)',
                 )
+                restore_in = gr.Checkbox(
+                    value=True, label='후처리: 얼굴·손·배경은 원본 사진으로 되돌리기',
+                    info='합성은 사진 전체를 다시 그려 얼굴까지 조금 바뀐다. 옷 자리만 합성 결과를 쓴다 (약 3초).',
+                )
             run_btn = gr.Button('피팅 해보기', variant='primary')
 
         with gr.Column():
@@ -318,7 +352,7 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
     run_btn.click(
         fn=run,
         inputs=[person_in, garment_in, cloth_in, garment_photo_in, ignore_check_in,
-                steps_in, guidance_in, seed_in, candidates_in,
+                steps_in, guidance_in, seed_in, candidates_in, restore_in,
                 chart_in, height_in, shoulder_in, chest_in, waist_in],
         outputs=[result_out, size_out, info_out],
     )

@@ -203,6 +203,19 @@ class TestGradioWiring(unittest.TestCase):
         self.assertIn('garment_in', wired, '옷 사진 업로드에 garment_status 가 연결돼 있지 않다')
         self.assertIn('garment_photo_in', wired, '사진 종류 변경에 garment_status 가 연결돼 있지 않다')
 
+    def test_restore_is_wired(self):
+        """후처리(원본 되돌리기, app/restore_original.py)가 run() 에 붙어 있고 끌 수 있는지.
+
+        발표 파이프라인은 사진 검사 → 합성 → 후처리 → 사이즈 추천이다. 모듈만 있고
+        앱에 안 붙어 있으면 시연에서 3단계가 빠진다.
+        """
+        run = find_function(self.tree, 'run')
+        self.assertIn('restore', [a.arg for a in run.args.args])
+        self.assertIn('postprocess(', ast.unparse(run), 'run() 이 후처리를 부르지 않는다')
+        post = find_function(self.tree, 'postprocess')
+        self.assertIsNotNone(post, 'postprocess() 가 없다')
+        self.assertIn('restore_original(', ast.unparse(post))
+
     def test_run_generates_candidates(self):
         """후보 장수가 run() 까지 전달되고, 결과가 갤러리로 나가는지."""
         run = find_function(self.tree, 'run')

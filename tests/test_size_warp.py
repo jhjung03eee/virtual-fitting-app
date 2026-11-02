@@ -58,10 +58,24 @@ class TestSizeWarp(unittest.TestCase):
         out, _ = warp_garment(Image.fromarray(rgb), mask, SHOULDER, 80, scale_x=1.3, scale_y=1.3)
         np.testing.assert_array_equal(np.asarray(out)[10:30, 70:90], rgb[10:30, 70:90])
 
+    def test_keep_stays_on_top(self):
+        """몸판이 넓어져도 팔(keep)은 원래 픽셀 그대로 위에 남는다."""
+        image, mask = tee()
+        rgb = np.asarray(image).copy()
+        rgb[SHOULDER + 10:HEM, RIGHT + 4:RIGHT + 12] = (200, 150, 120)   # 몸 옆에 늘어뜨린 팔
+        keep = np.zeros(mask.shape, bool)
+        keep[SHOULDER + 10:HEM, RIGHT + 4:RIGHT + 12] = True
+        out, new_mask = warp_garment(Image.fromarray(rgb), mask, SHOULDER, 80, scale_x=1.3, scale_y=1.0, keep=keep)
+        self.assertTrue(new_mask[SHOULDER + 30, RIGHT + 8])                 # 옷은 팔 자리까지 넓어졌지만
+        np.testing.assert_array_equal(np.asarray(out)[SHOULDER + 30, RIGHT + 8], (200, 150, 120))  # 팔이 위
+
     def test_scales_for_size(self):
         sx, sy = scales_for_size({'chest': 0.7, 'length': 1.0}, {'chest': 0.63, 'length': 1.1})
         self.assertAlmostEqual(sx, 0.9)
         self.assertAlmostEqual(sy, 1.1)
+        # 겨드랑이 위 0.3 은 그대로 → 늘어날 0.1 을 아래 0.7 이 모두 맡는다
+        _, sy = scales_for_size({'chest': 0.7, 'length': 1.0}, {'chest': 0.7, 'length': 1.1}, top=0.3)
+        self.assertAlmostEqual(sy, 0.8 / 0.7)
 
 
 if __name__ == '__main__':

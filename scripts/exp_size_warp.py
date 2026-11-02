@@ -30,13 +30,28 @@ sys.path.insert(0, os.path.join(ROOT, 'scripts'))
 
 from measure_size_effect import measure  # noqa: E402
 from measure_uniqlo import INPUTS, SIZES, frame_of, navy_mask  # noqa: E402
+from restore_original import segment  # noqa: E402
 from size_warp import scales_for_size, warp_garment  # noqa: E402
+
+BODY_SKIN = 2   # selfie_multiclass: 0 배경 · 1 머리카락 · 2 몸 피부(팔·손) · 3 얼굴 · 4 옷 · 5 기타
 
 CHART = os.path.join(ROOT, 'data', 'size_charts', 'uniqlo_crew_tee_navy.json')
 OUT = os.path.join(ROOT, 'data', 'samples', 'results', 'size_warp')
 NAME = re.compile(r'^P__uniqlo_(?P<orig>orig\d)__uniqlo_navy__.*_s(?P<seed>\d+)_')
 KEYS = ('chest', 'length')
 KO = {'chest': '몸판 폭', 'length': '기장'}
+
+
+def armpit(info, torso_px):
+    """소매 끝(겨드랑이) 줄: 소매 폭이 가장 넓은 줄 아래에서 옷 폭이 소매 폭과 몸판 폭의 중간 밑으로 처음 떨어지는 곳.
+    → (y 픽셀, 어깨선~겨드랑이 길이를 몸통 길이로 나눈 값)"""
+    counts = info['_mask'].sum(axis=1)
+    chest_row, sleeve_row, _hem, shoulder_y = info['_rows']
+    cut = (counts[sleeve_row] + counts[chest_row]) / 2
+    y = sleeve_row
+    while y < chest_row and counts[y] > cut:
+        y += 1
+    return y, (y - shoulder_y) / torso_px
 
 
 def calibrate(real, chart, sizes):
@@ -75,14 +90,15 @@ def main(folder):
         frame = frames[orig]
         result = Image.open(path).convert('RGB')
         now = measure(result, frame, navy_mask)
-        shoulder_y = now['_rows'][3]
+        top_y, top = armpit(now, frame[1] * result.height)
         center_x = frame[2] * result.width
+        arms = segment(result) == BODY_SKIN
         for s in SIZES:
             k = calibrate(real, chart, [o for o in SIZES if o != s])
             target = {key: k[key] * chart[s][key] for key in KEYS}
-            scale_x, scale_y = scales_for_size(now, target)
+            scale_x, scale_y = scales_for_size(now, target, top)
             start = time.perf_counter()
-            warped, _ = warp_garment(result, now['_mask'], shoulder_y, center_x, scale_x, scale_y)
+            warped, _ = warp_garment(result, now['_mask'], top_y, center_x, scale_x, scale_y, keep=arms)
             seconds.append(time.perf_counter() - start)
             after = measure(warped, frame, navy_mask)
             rows.append(dict(name=f'{orig} s{m["seed"]}', size=s, scale_x=scale_x, scale_y=scale_y,

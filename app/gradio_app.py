@@ -5,7 +5,6 @@
 FASHN 저장소·가중치 위치는 app/paths.py (FASHN_REPO, FASHN_WEIGHTS 환경변수로 바꿀 수 있음).
 화면 스타일은 app/ui_style.py (FITCHECK_THEME 환경변수로 후보를 바꿔 볼 수 있음).
 """
-import glob
 import html
 import json
 import os
@@ -44,7 +43,7 @@ _gcu._json_schema_to_python_type = _safe_json_schema_to_python_type
 _gcu.get_type = _safe_get_type
 # -------------------------------------------------------------------------
 
-from fashn_core import (try_on, load_models, warmup, FASHN_REPO, CATEGORY_BY_CLOTH_TYPE,
+from fashn_core import (try_on, load_models, warmup, CATEGORY_BY_CLOTH_TYPE,
                         DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
 from garment_check import check_garment
@@ -54,12 +53,11 @@ from restore_original import restore_original
 from size_fit import SizeChart, ko, recommend
 from ui_style import HEADER_HTML, STYLE, section
 
+# 이너·아우터는 FASHN에서 상의와 같은 처리라(fashn_core.CATEGORY_BY_CLOTH_TYPE) 화면에서는 뺐다
 CLOTH_LABELS = {
     '상의': 'upper',
     '하의': 'lower',
-    '원피스 (상하 일체)': 'overall',
-    '이너': 'inner',
-    '아우터': 'outer',
+    '원피스': 'overall',
 }
 
 
@@ -227,11 +225,7 @@ def photo_status(person):
     guide = draw_guide(person, landmarks, check) if landmarks else None
     if check.ok and not check.warnings:
         return _note('ok', [check.message()]), guide
-    lines = check.message().splitlines()
-    if check.errors:
-        lines.append('다시 찍기 어렵다면 **고급 설정 › 사진 검사 무시하고 합성**을 켜고 진행할 수 있어요 '
-                     '(결과가 나빠질 수 있어요).')
-    return _note('err' if check.errors else 'warn', lines), guide
+    return _note('err' if check.errors else 'warn', check.message().splitlines()), guide
 
 
 def garment_status(garment, garment_photo_label):
@@ -262,63 +256,38 @@ def postprocess(person, result, cloth_type):
     return restored, f'후처리 {time.perf_counter() - start:.1f}초'
 
 
-def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
-        steps, guidance_scale, seed, num_candidates, restore,
+def run(person, garment, cloth_label, garment_photo_label,
         chart_file, height, shoulder, chest, waist, progress=gr.Progress()):
+    """합성 → 후처리 → 사이즈 추천. 설정은 엔진 기본값으로 고정한다(스텝 25 · guidance 2.5 · 시드 42).
+
+    고급 설정(스텝·시드·후보 장수·후처리 끄기·사진 검사 무시)과 후처리 전후 비교는 2026-11-02에 뺐다.
+    시드를 고정하면 같은 사진·옷은 늘 같은 결과라 시연 백업 이미지와 일치한다.
+    """
     if person is None or garment is None:
         raise gr.Error('인물 사진과 옷 사진을 모두 올려주세요.')
 
-    if not ignore_photo_check:
-        check = check_photo(person)
-        if not check.ok:
-            raise gr.Error(check.message() + '\n(그대로 해보려면 고급 설정에서 "사진 검사 무시하고 합성"을 켜세요)')
+    check = check_photo(person)
+    if not check.ok:
+        raise gr.Error(check.message() + '\n사진 검사 안내대로 다시 찍어 올려 주세요.')
 
     advice = size_advice(chart_file, height, shoulder, chest, waist)
 
-    # 같은 설정도 시드에 따라 결과가 갈린다(셔츠 6장 중 1장 실패, docs/PLAN.md F-19).
-    # 여러 장을 뽑아 고르게 한다. 시드 -1이면 try_on 이 매번 다른 시드를 뽑는다.
-    count = max(1, int(num_candidates))
     cloth_type = CLOTH_LABELS[cloth_label]
-    gallery, seeds, seconds, notes = [], [], [], []
-    for i in range(count):
-        progress(i / count, desc=f'후보 {i + 1}/{count} 합성 중')
-        result, timing = try_on(
-            person=person,
-            garment=garment,
-            cloth_type=cloth_type,
-            garment_photo_type=GARMENT_PHOTO_LABELS[garment_photo_label],
-            steps=int(steps),
-            guidance_scale=float(guidance_scale),
-            seed=int(seed) if int(seed) == -1 else int(seed) + i,
-            return_timing=True,
-        )
-        if restore:
-            progress((i + 0.9) / count, desc=f'후보 {i + 1}/{count} 후처리 중')
-            restored, note = postprocess(person, result, cloth_type)
-            notes.append(note)
-            gallery.append((restored, f"시드 {timing['seed']} · 후처리"))
-            if count == 1 and restored is not result:
-                gallery.append((result, '비교: 합성 그대로 (후처리 전)'))
-        else:
-            gallery.append((result, f"시드 {timing['seed']}"))
-        seeds.append(str(timing['seed']))
-        seconds.append(timing['total_s'])
-    info = (f"{count}장 합성 · 장당 {sum(seconds) / count:.0f}초 · 시드 {', '.join(seeds)} · {timing['dtype']}")
-    if notes:
-        info += ' · ' + notes[-1]
-    if count > 1:
-        info += '\n\n마음에 드는 결과의 시드를 고급 설정에 넣으면 같은 결과를 다시 볼 수 있어요.'
-    # 첫 장(후처리 결과)을 크게 펼쳐 보여 준다. 나머지는 아래 썸네일
-    return gr.Gallery(value=gallery, selected_index=0), advice, info
-
-
-def _examples():
-    """FASHN 저장소 예시 이미지로 예시 조합을 만든다. 없으면 빈 리스트."""
-    person = glob.glob(os.path.join(FASHN_REPO, 'examples/data/model.*'))
-    garment = glob.glob(os.path.join(FASHN_REPO, 'examples/data/garment.*'))
-    if not person or not garment:
-        return []
-    return [[person[0], garment[0], '상의', '착용 사진 (사람이 입고 찍음)']]
+    progress(0.0, desc='합성 중 (약 50초)')
+    result, timing = try_on(
+        person=person,
+        garment=garment,
+        cloth_type=cloth_type,
+        garment_photo_type=GARMENT_PHOTO_LABELS[garment_photo_label],
+        steps=DEFAULT_STEPS,
+        guidance_scale=DEFAULT_GUIDANCE,
+        seed=DEFAULT_SEED,
+        return_timing=True,
+    )
+    progress(0.95, desc='얼굴·배경 되돌리는 중')
+    restored, note = postprocess(person, result, cloth_type)
+    info = f"합성 {timing['total_s']:.0f}초 · {note}"
+    return restored, advice, info
 
 
 # gradio 6부터 theme·css·head 는 Blocks() 가 아니라 launch() 인자다 (Colab은 최신을 설치한다)
@@ -368,37 +337,13 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
             gr.HTML('<p class="fc-help">둘레로 넣으면 치수표의 단면과 자동으로 맞춰요 (가슴둘레 96 → 단면 48). '
                     '레귤러핏 옷 기준이라, 오버핏으로 나온 옷은 크게 추천될 수 있어요.</p>', padding=False)
 
-            with gr.Accordion('고급 설정', open=False):
-                ignore_check_in = gr.Checkbox(
-                    value=False, label='사진 검사 무시하고 합성',
-                    info='가이드에 안 맞는 사진도 그대로 넣어본다. 결과가 나빠질 수 있다.',
-                )
-                steps_in = gr.Slider(
-                    20, 50, value=DEFAULT_STEPS, step=1,
-                    label='추론 스텝 (25 기본. 50으로 올려도 결과는 거의 같고 2배 느려진다)',
-                )
-                guidance_in = gr.Slider(
-                    1.0, 4.0, value=DEFAULT_GUIDANCE, step=0.1,
-                    label='guidance scale (2.5 기본. 낮추면 글자 프린트가 휜다)',
-                )
-                seed_in = gr.Number(value=DEFAULT_SEED, precision=0,
-                                    label='시드 (-1이면 매번 랜덤. 결과가 어색하면 바꿔서 다시)')
-                candidates_in = gr.Slider(
-                    1, 4, value=1, step=1,
-                    label='후보 장수 (시드를 하나씩 바꿔 여러 장 뽑고 고른다. 장수만큼 오래 걸린다)',
-                )
-                restore_in = gr.Checkbox(
-                    value=True, label='후처리: 얼굴·손·배경은 원본 사진으로 되돌리기',
-                    info='합성은 사진 전체를 다시 그려 얼굴까지 조금 바뀐다. 옷 자리만 합성 결과를 쓴다 (약 3초).',
-                )
             with gr.Row(elem_classes='fc-actions'):
                 size_btn = gr.Button('사이즈만 보기', variant='secondary', size='lg', scale=2)
                 run_btn = gr.Button('피팅 해보기', variant='primary', size='lg', scale=3, elem_classes='fc-cta')
 
         with gr.Column(scale=6, elem_classes='fc-result'):
             gr.HTML(section('04', '피팅 결과', '한 장 약 50초 · T4 GPU'), padding=False)
-            result_out = gr.Gallery(label='피팅 결과', show_label=False, height=640, columns=2,
-                                    object_fit='contain', preview=True)
+            result_out = gr.Image(label='피팅 결과', show_label=False, type='pil', height=640, interactive=False)
             info_out = gr.Markdown(elem_classes='fc-info')
             size_out = gr.HTML(size_advice(None, None, None, None, None), padding=False)
 
@@ -413,8 +358,7 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
 
     run_btn.click(
         fn=run,
-        inputs=[person_in, garment_in, cloth_in, garment_photo_in, ignore_check_in,
-                steps_in, guidance_in, seed_in, candidates_in, restore_in,
+        inputs=[person_in, garment_in, cloth_in, garment_photo_in,
                 chart_in, height_in, shoulder_in, chest_in, waist_in],
         outputs=[result_out, size_out, info_out],
     )
@@ -423,10 +367,6 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
         inputs=[chart_in, height_in, shoulder_in, chest_in, waist_in],
         outputs=[size_out],
     )
-
-    examples = _examples()
-    if examples:
-        gr.Examples(examples=examples, inputs=[person_in, garment_in, cloth_in, garment_photo_in], label='예시')
 
 
 if __name__ == '__main__':

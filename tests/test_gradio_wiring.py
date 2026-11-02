@@ -181,7 +181,6 @@ class TestGradioWiring(unittest.TestCase):
                       '인물 사진 업로드에 photo_status 가 연결돼 있지 않다')
 
         run = find_function(self.tree, 'run')
-        self.assertIn('ignore_photo_check', [a.arg for a in run.args.args])
         self.assertIn('check_photo(', ast.unparse(run),
                       'run() 이 합성 전에 사진 검사를 하지 않는다')
 
@@ -204,23 +203,25 @@ class TestGradioWiring(unittest.TestCase):
         self.assertIn('garment_photo_in', wired, '사진 종류 변경에 garment_status 가 연결돼 있지 않다')
 
     def test_restore_is_wired(self):
-        """후처리(원본 되돌리기, app/restore_original.py)가 run() 에 붙어 있고 끌 수 있는지.
+        """후처리(원본 되돌리기, app/restore_original.py)가 run() 에 항상 붙어 있는지.
 
         발표 파이프라인은 사진 검사 → 합성 → 후처리 → 사이즈 추천이다. 모듈만 있고
-        앱에 안 붙어 있으면 시연에서 3단계가 빠진다.
+        앱에 안 붙어 있으면 시연에서 3단계가 빠진다. (끄는 설정은 2026-11-02에 뺐다)
         """
         run = find_function(self.tree, 'run')
-        self.assertIn('restore', [a.arg for a in run.args.args])
         self.assertIn('postprocess(', ast.unparse(run), 'run() 이 후처리를 부르지 않는다')
         post = find_function(self.tree, 'postprocess')
         self.assertIsNotNone(post, 'postprocess() 가 없다')
         self.assertIn('restore_original(', ast.unparse(post))
 
-    def test_run_generates_candidates(self):
-        """후보 장수가 run() 까지 전달되고, 결과가 갤러리로 나가는지."""
-        run = find_function(self.tree, 'run')
-        self.assertIn('num_candidates', [a.arg for a in run.args.args])
-        self.assertIn('gr.Gallery(', ast.unparse(self.tree), '결과 위젯이 갤러리가 아니다')
+    def test_run_uses_engine_defaults(self):
+        """설정 화면을 뺐으므로 run() 이 엔진 기본값(스텝·guidance·시드)을 그대로 넘기는지.
+
+        시드가 고정이어야 같은 사진·옷이 늘 같은 결과가 되고, 시연 백업 이미지와 일치한다.
+        """
+        source = ast.unparse(find_function(self.tree, 'run'))
+        for name in ('DEFAULT_STEPS', 'DEFAULT_GUIDANCE', 'DEFAULT_SEED'):
+            self.assertIn(name, source, f'run() 이 {name} 을 쓰지 않는다')
 
 
 if __name__ == '__main__':

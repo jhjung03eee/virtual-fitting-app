@@ -110,6 +110,9 @@ footer { display: none !important; }
 .fc-sec .fc-num { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--fc-point); }
 .fc-sec h2 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: var(--fc-ink); }
 .fc-sec p { margin: 0 0 0 auto; font-size: 12px; color: var(--fc-sub); }
+.fc-time { align-self: center; padding: 3px 9px; font-size: 12px; font-weight: 700; line-height: 1.4;
+  font-variant-numeric: tabular-nums; color: var(--fc-point_ink); background: var(--fc-point);
+  border-radius: var(--fc-radius_sm); }
 .fc-help { margin: 0; font-size: 12px; line-height: 1.6; color: var(--fc-sub); }
 .fc-info p { margin: 0; font-size: 12px; color: var(--fc-sub); }
 
@@ -193,9 +196,11 @@ HEADER_HTML = """
 """
 
 
-def section(num, title, hint=''):
+def section(num, title, hint='', elapsed=None):
+    """섹션 제목 줄. elapsed(예: '2.1s')를 주면 오른쪽 끝에 걸린 시간 배지를 붙인다."""
+    badge = f'<span class="fc-time">{elapsed}</span>' if elapsed else ''
     return (f'<div class="fc-sec"><span class="fc-num">{num}</span><h2>{title}</h2>'
-            f'<p>{hint}</p></div>')
+            f'<p>{hint}</p>{badge}</div>')
 
 
 STYLE = dict(theme=_theme(), css=CSS, head=HEAD, js=FORCE_LIGHT_JS)

@@ -195,9 +195,34 @@ def size_advice(chart_file, height, shoulder, chest, waist) -> str:
     )
 
 
+# 섹션 제목 줄 (번호 → 제목, 안내). 오른쪽 끝에 그 단계에 걸린 시간을 배지로 붙인다
+SECTIONS = {
+    '01': ('내 사진', '정면 · 전신 · 3:4 세로 사진'),
+    '02': ('옷', '배경이 깔끔한 상품 사진일수록 좋아요'),
+    '03': ('내 치수', '아는 항목만 · 둘레로 입력'),
+    '04': ('피팅 결과', '한 장 약 50초 · T4 GPU'),
+}
+
+
+def secs(seconds):
+    """걸린 시간 표기: <0.01s · 0.03s · 2.1s · 52s"""
+    if seconds < 0.01:
+        return '<0.01s'
+    if seconds < 1:
+        return f'{seconds:.2f}s'
+    return f'{seconds:.1f}s' if seconds < 10 else f'{seconds:.0f}s'
+
+
+def sec(num, seconds=None):
+    title, hint = SECTIONS[num]
+    return section(num, title, hint, secs(seconds) if seconds is not None else None)
+
+
 def size_only(chart_file, height, shoulder, chest, waist):
     """합성 없이 사이즈 추천만 바로 보여준다 (합성은 한 장에 약 50초)."""
-    return size_advice(chart_file, height, shoulder, chest, waist)
+    start = time.perf_counter()
+    advice = size_advice(chart_file, height, shoulder, chest, waist)
+    return advice, sec('03', time.perf_counter() - start)
 
 
 GARMENT_PHOTO_LABELS = {
@@ -215,7 +240,8 @@ def photo_status(person):
     포즈 인식(mediapipe)이 없거나 실패하면 photo_check 가 경고만 남기고 넘어간다.
     """
     if person is None:
-        return PHOTO_HINT, None
+        return PHOTO_HINT, None, sec('01')
+    start = time.perf_counter()
     # 포즈를 한 번만 돌려 검사와 그림에 같이 쓴다. 따로 돌리면 느리고 둘이 어긋날 수 있다
     try:
         landmarks, seg_mask = run_pose(person)
@@ -223,9 +249,10 @@ def photo_status(person):
         landmarks = seg_mask = None
     check = check_photo(person, landmarks, seg_mask)
     guide = draw_guide(person, landmarks, check) if landmarks else None
+    header = sec('01', time.perf_counter() - start)
     if check.ok and not check.warnings:
-        return _note('ok', [check.message()]), guide
-    return _note('err' if check.errors else 'warn', check.message().splitlines()), guide
+        return _note('ok', [check.message()]), guide, header
+    return _note('err' if check.errors else 'warn', check.message().splitlines()), guide, header
 
 
 def garment_status(garment, garment_photo_label):
@@ -234,9 +261,11 @@ def garment_status(garment, garment_photo_label):
     경고만 하고 합성은 막지 않는다. 기준은 FASHN 실험 결과에 맞췄다(docs/PLAN.md F-23).
     """
     if garment is None:
-        return ''
+        return '', sec('02')
+    start = time.perf_counter()
     check = check_garment(garment, photo_type=GARMENT_PHOTO_LABELS.get(garment_photo_label, 'flat-lay'))
-    return _note('ok' if check.suitable else 'warn', check.message().splitlines())
+    return (_note('ok' if check.suitable else 'warn', check.message().splitlines()),
+            sec('02', time.perf_counter() - start))
 
 
 def postprocess(person, result, cloth_type):
@@ -253,7 +282,7 @@ def postprocess(person, result, cloth_type):
     restored, mask = restore_original(person, result, CATEGORY_BY_CLOTH_TYPE[cloth_type])
     if mask is None:
         return result, '후처리 건너뜀 — 신체 부위 구분 모델(mediapipe)을 못 씀'
-    return restored, f'후처리 {time.perf_counter() - start:.1f}초'
+    return restored, f'후처리 {secs(time.perf_counter() - start)}'
 
 
 def run(person, garment, cloth_label, garment_photo_label,
@@ -270,10 +299,13 @@ def run(person, garment, cloth_label, garment_photo_label,
     if not check.ok:
         raise gr.Error(check.message() + '\n사진 검사 안내대로 다시 찍어 올려 주세요.')
 
+    start = time.perf_counter()
     advice = size_advice(chart_file, height, shoulder, chest, waist)
+    size_header = sec('03', time.perf_counter() - start)
 
     cloth_type = CLOTH_LABELS[cloth_label]
     progress(0.0, desc='합성 중 (약 50초)')
+    start = time.perf_counter()
     result, timing = try_on(
         person=person,
         garment=garment,
@@ -286,8 +318,8 @@ def run(person, garment, cloth_label, garment_photo_label,
     )
     progress(0.95, desc='얼굴·배경 되돌리는 중')
     restored, note = postprocess(person, result, cloth_type)
-    info = f"합성 {timing['total_s']:.0f}초 · {note}"
-    return restored, advice, info
+    info = f"합성 {secs(timing['total_s'])} · {note}"
+    return restored, advice, info, size_header, sec('04', time.perf_counter() - start)
 
 
 # gradio 6부터 theme·css·head 는 Blocks() 가 아니라 launch() 인자다 (Colab은 최신을 설치한다)
@@ -298,7 +330,8 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
 
     with gr.Row(equal_height=False, elem_classes='fc-main'):
         with gr.Column(scale=5, elem_classes='fc-panel'):
-            gr.HTML(section('01', '내 사진', '정면 · 전신 · 3:4 세로 사진'), padding=False)
+            # 섹션 제목 줄도 출력이다 — 각 단계가 끝나면 걸린 시간 배지를 붙여 다시 그린다
+            sec1_out = gr.HTML(sec('01'), padding=False)
             with gr.Row():
                 person_in = gr.Image(label='인물 사진', type='pil', height=360)
                 # 초록 = 통과, 빨강 = 다시 찍기. 노란 막대 = 필요한 코~발목 길이, 그 옆 막대 = 사진 속 길이 (app/photo_guide.py)
@@ -306,7 +339,7 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                                            type='pil', height=360, interactive=False)
             photo_status_out = gr.HTML(PHOTO_HINT, padding=False)
 
-            gr.HTML(section('02', '옷', '배경이 깔끔한 상품 사진일수록 좋아요'), padding=False)
+            sec2_out = gr.HTML(sec('02'), padding=False)
             with gr.Row():
                 garment_in = gr.Image(label='옷 사진', type='pil', height=360)
                 with gr.Column():
@@ -322,7 +355,7 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                     )
                     garment_status_out = gr.HTML('', padding=False)
 
-            gr.HTML(section('03', '내 치수', '아는 항목만 · 둘레로 입력'), padding=False)
+            sec3_out = gr.HTML(sec('03'), padding=False)
             with gr.Row():
                 height_in = gr.Number(value=175, label='키 (cm)')
                 shoulder_in = gr.Number(value=None, label='어깨너비 (cm)', placeholder='모르면 비워 두기')
@@ -342,7 +375,7 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                 run_btn = gr.Button('피팅 해보기', variant='primary', size='lg', scale=3, elem_classes='fc-cta')
 
         with gr.Column(scale=6, elem_classes='fc-result'):
-            gr.HTML(section('04', '피팅 결과', '한 장 약 50초 · T4 GPU'), padding=False)
+            sec4_out = gr.HTML(sec('04'), padding=False)
             result_out = gr.Image(label='피팅 결과', show_label=False, type='pil', height=640, interactive=False)
             info_out = gr.Markdown(elem_classes='fc-info')
             size_out = gr.HTML(size_advice(None, None, None, None, None), padding=False)
@@ -350,22 +383,24 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
     # 사진을 올리는 순간 검사한다 (합성 한 장에 2분이라 미리 걸러야 한다)
-    person_in.change(fn=photo_status, inputs=[person_in], outputs=[photo_status_out, photo_guide_out])
+    person_in.change(fn=photo_status, inputs=[person_in],
+                     outputs=[photo_status_out, photo_guide_out, sec1_out])
     # 옷 사진도 올리는 순간 검사한다. 사진 종류(상품/착용)에 따라 기준이 달라 둘 다 연결한다
-    garment_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in], outputs=[garment_status_out])
+    garment_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in],
+                      outputs=[garment_status_out, sec2_out])
     garment_photo_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in],
-                            outputs=[garment_status_out])
+                            outputs=[garment_status_out, sec2_out])
 
     run_btn.click(
         fn=run,
         inputs=[person_in, garment_in, cloth_in, garment_photo_in,
                 chart_in, height_in, shoulder_in, chest_in, waist_in],
-        outputs=[result_out, size_out, info_out],
+        outputs=[result_out, size_out, info_out, sec3_out, sec4_out],
     )
     size_btn.click(
         fn=size_only,
         inputs=[chart_in, height_in, shoulder_in, chest_in, waist_in],
-        outputs=[size_out],
+        outputs=[size_out, sec3_out],
     )
 
 

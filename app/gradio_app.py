@@ -104,10 +104,11 @@ def _rich(text):
     return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html.escape(text))
 
 
-def _note(level, lines):
-    """검사 결과 안내 상자. level: ok · warn · err · hint"""
+def _note(level, lines, elapsed=None):
+    """검사 결과 안내 상자. level: ok · warn · err · hint. elapsed(초)를 주면 오른쪽 위에 '검사 3.0s'."""
     body = ''.join(f'<p>{_rich(line)}</p>' for line in lines)
-    return f'<div class="fc-note fc-note--{level}">{body}</div>'
+    took = f'<span class="fc-note__time">검사 {secs(elapsed)}</span>' if elapsed is not None else ''
+    return f'<div class="fc-note fc-note--{level}">{took}{body}</div>'
 
 
 def _recommend(chart_file, height, shoulder, chest, waist):
@@ -249,10 +250,11 @@ def photo_status(person):
         landmarks = seg_mask = None
     check = check_photo(person, landmarks, seg_mask)
     guide = draw_guide(person, landmarks, check) if landmarks else None
-    header = sec('01', time.perf_counter() - start)
+    took = time.perf_counter() - start
+    header = sec('01', took)
     if check.ok and not check.warnings:
-        return _note('ok', [check.message()]), guide, header
-    return _note('err' if check.errors else 'warn', check.message().splitlines()), guide, header
+        return _note('ok', [check.message()], took), guide, header
+    return _note('err' if check.errors else 'warn', check.message().splitlines(), took), guide, header
 
 
 def garment_status(garment, garment_photo_label):
@@ -264,8 +266,9 @@ def garment_status(garment, garment_photo_label):
         return '', sec('02')
     start = time.perf_counter()
     check = check_garment(garment, photo_type=GARMENT_PHOTO_LABELS.get(garment_photo_label, 'flat-lay'))
-    return (_note('ok' if check.suitable else 'warn', check.message().splitlines()),
-            sec('02', time.perf_counter() - start))
+    took = time.perf_counter() - start
+    return (_note('ok' if check.suitable else 'warn', check.message().splitlines(), took),
+            sec('02', took))
 
 
 def postprocess(person, result, cloth_type):

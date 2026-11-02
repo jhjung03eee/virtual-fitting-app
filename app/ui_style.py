@@ -120,6 +120,8 @@ footer { display: none !important; }
 .fc-note { padding: 11px 14px; border-left: 3px solid var(--fc-line); background: var(--fc-soft);
   border-radius: var(--fc-radius_sm); font-size: 13px; line-height: 1.6; color: var(--fc-ink); }
 .fc-note p { margin: 0; }
+.fc-note__time { float: right; margin-left: 12px; font-size: 12px; font-weight: 700; color: var(--fc-ink);
+  font-variant-numeric: tabular-nums; }
 .fc-note--ok { border-left-color: var(--fc-ok); }
 .fc-note--warn { border-left-color: var(--fc-warn); }
 .fc-note--err { border-left-color: var(--fc-err); }

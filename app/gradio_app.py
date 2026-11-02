@@ -3,10 +3,13 @@
 기본 파이썬(3.10 이상)에서 실행 — CatVTON용 3.9 venv가 아니다:
     python app/gradio_app.py
 FASHN 저장소·가중치 위치는 app/paths.py (FASHN_REPO, FASHN_WEIGHTS 환경변수로 바꿀 수 있음).
+화면 스타일은 app/ui_style.py (FITCHECK_THEME 환경변수로 후보를 바꿔 볼 수 있음).
 """
 import glob
+import html
 import json
 import os
+import re
 import sys
 import time
 
@@ -49,6 +52,7 @@ from photo_check import check_photo, run_pose
 from photo_guide import draw_guide
 from restore_original import restore_original
 from size_fit import SizeChart, ko, recommend
+from ui_style import HEADER_HTML, STYLE, section
 
 CLOTH_LABELS = {
     '상의': 'upper',
@@ -97,47 +101,100 @@ def charts_for_cloth(cloth_label):
     return gr.update(choices=files, value=files[0] if files else None)
 
 
-def size_advice(chart_file, height, shoulder, chest, waist) -> str:
-    """입력한 신체 치수와 옷 치수표를 비교해 사이즈 추천 문구를 만든다."""
+def _rich(text):
+    """안내 문구의 **굵게** 만 HTML로 바꾼다. 나머지는 이스케이프."""
+    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html.escape(text))
+
+
+def _note(level, lines):
+    """검사 결과 안내 상자. level: ok · warn · err · hint"""
+    body = ''.join(f'<p>{_rich(line)}</p>' for line in lines)
+    return f'<div class="fc-note fc-note--{level}">{body}</div>'
+
+
+def _recommend(chart_file, height, shoulder, chest, waist):
+    """(치수표, 추천, None) 또는 (None, None, (제목, [문구]))."""
     if not chart_file:
-        return '치수표가 없어 사이즈 추천을 건너뜁니다.'
+        return None, None, (None, ['치수표가 없어 사이즈 추천을 건너뜁니다.'])
     try:
         profile = BodyProfile.from_inputs(
             height_cm=height, shoulder_cm=shoulder, chest_circumference_cm=chest,
             waist_circumference_cm=waist,
         )
     except ValueError as e:
-        return f'**사이즈 추천 불가** — {e}'
+        return None, None, ('사이즈 추천 불가', [str(e)])
 
     problems = profile.validate()
     if problems:
-        return '**입력값을 확인해주세요**\n\n' + '\n'.join(f'- {p}' for p in problems)
+        return None, None, ('입력값을 확인해주세요', problems)
 
     body = profile.to_chart_dimensions()
     if not body:
-        return '신체 치수를 하나 이상 입력하면 사이즈를 추천합니다.'
+        return None, None, (None, ['신체 치수를 하나 이상 입력하면 사이즈를 추천합니다.'])
 
     chart = load_chart(chart_file)
-
     rec = recommend(chart, body)
     if rec.best is None and not set(chart.dimensions()) & set(body):
-        return ('**사이즈 추천 불가** — '
-                f'`{chart.name}`({chart.category})와 입력한 치수가 맞지 않습니다. '
-                '옷 종류에 맞는 치수표를 선택했는지 확인해주세요.')
+        return None, None, ('사이즈 추천 불가', [
+            f'{chart.name}({chart.category})와 입력한 치수가 맞지 않습니다. '
+            '옷 종류에 맞는 치수표를 선택했는지 확인해주세요.'])
     if rec.best is None:
-        return '**사이즈 추천 불가** — ' + ' '.join(rec.notes)
+        return None, None, ('사이즈 추천 불가', [' '.join(rec.notes)])
+    return chart, rec, None
 
-    lines = [f'### {rec.message}', '', f'**{chart.name}** 기준 · 레귤러핏 옷 기준 추천', '',
-             '| 사이즈 | 항목별 여유분 | 총장 | 입을 수 있음 |', '|---|---|---|---|']
-    for fit in rec.ranked:
-        detail = ' / '.join(f'{ko(d.dimension)} {d.ease_cm:+.1f}cm ({d.label})'
-                            for d in fit.dimensions)
-        length = chart.sizes[fit.size].get('length')
-        length_txt = f'{length:g}cm' if length is not None else '-'
-        lines.append(f"| {fit.size} | {detail} | {length_txt} | {'O' if fit.wearable else 'X'} |")
-    for note in rec.notes:
-        lines.append(f'\n> {note}')
-    return '\n'.join(lines)
+
+# 여유분 판정(size_fit.FIT_BANDS 라벨) → 표의 색 점
+FIT_TONE = {'작음': 'err', '타이트': 'warn', '레귤러': 'ok', '루즈': 'mute', '오버핏': 'mute'}
+
+
+def size_advice(chart_file, height, shoulder, chest, waist) -> str:
+    """입력한 신체 치수와 옷 치수표를 비교해 사이즈 추천 카드(HTML)를 만든다."""
+    chart, rec, error = _recommend(chart_file, height, shoulder, chest, waist)
+    head = '<p class="fc-eyebrow">Size</p>'
+    if error:
+        title, lines = error
+        title_html = f'<h3 class="fc-size__title">{html.escape(title)}</h3>' if title else ''
+        return (f'<div class="fc-size">{head}{title_html}'
+                + ''.join(f'<p class="fc-size__msg">{html.escape(line)}</p>' for line in lines) + '</div>')
+
+    best = rec.best
+    by_size = {fit.size: fit for fit in rec.ranked}
+    if best.wearable:
+        labels = {d.dimension: d.label for d in best.dimensions}
+        verdict = f"{labels.get('chest') or labels.get('waist') or '레귤러'} 핏"
+    else:
+        verdict = '모든 사이즈가 몸보다 작아요'
+    chips = ''.join(
+        f'<span class="fc-chip{" is-pick" if size == best.size else ""}'
+        f'{"" if by_size[size].wearable else " is-no"}">{html.escape(size)}</span>'
+        for size in chart.sizes)
+
+    dims = [d.dimension for d in best.dimensions]
+    has_length = any('length' in row for row in chart.sizes.values())
+    header = ''.join(f'<th>{ko(d)}</th>' for d in dims) + ('<th>총장</th>' if has_length else '')
+    rows = []
+    for size in chart.sizes:
+        fit = by_size[size]
+        cells = ''.join(
+            f'<td>{d.ease_cm:+.1f}<span class="fc-tone tone-{FIT_TONE.get(d.label, "mute")}">'
+            f'{html.escape(d.label)}</span></td>' for d in fit.dimensions)
+        if has_length:
+            length = chart.sizes[size].get('length')
+            cells += f'<td>{length:g}</td>' if length is not None else '<td>-</td>'
+        pick = ' class="is-pick"' if size == best.size else ''
+        rows.append(f'<tr{pick}><td class="fc-size__name">{html.escape(size)}</td>{cells}</tr>')
+    notes = ''.join(f'<li>{html.escape(note)}</li>' for note in rec.notes)
+    return (
+        f'<div class="fc-size">{head}'
+        f'<div class="fc-size__head"><span class="fc-size__big">{html.escape(best.size)}</span>'
+        f'<span class="fc-size__verdict{"" if best.wearable else " is-no"}">{verdict}</span></div>'
+        f'<p class="fc-size__src">{html.escape(chart.name)} · 레귤러핏 옷 기준</p>'
+        f'<div class="fc-chips">{chips}</div>'
+        f'<table class="fc-table"><thead><tr><th>사이즈</th>{header}</tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table>'
+        '<p class="fc-size__legend">표의 숫자 = 옷 단면 − 몸 단면 (cm). + 는 여유, − 는 옷이 작음</p>'
+        f'<ul class="fc-size__notes">{notes}</ul></div>'
+    )
 
 
 def size_only(chart_file, height, shoulder, chest, waist):
@@ -150,6 +207,8 @@ GARMENT_PHOTO_LABELS = {
     '착용 사진 (사람이 입고 찍음)': 'model',
 }
 
+PHOTO_HINT = _note('hint', ['올리는 순간 자세·거리를 검사해요. 정면 · 팔은 몸에서 주먹 하나 · 머리부터 발끝까지 화면 가득'])
+
 
 def photo_status(person):
     """인물 사진을 올린 순간 자세·거리·역광을 검사해 안내한다 (app/photo_check.py).
@@ -158,7 +217,7 @@ def photo_status(person):
     포즈 인식(mediapipe)이 없거나 실패하면 photo_check 가 경고만 남기고 넘어간다.
     """
     if person is None:
-        return '', None
+        return PHOTO_HINT, None
     # 포즈를 한 번만 돌려 검사와 그림에 같이 쓴다. 따로 돌리면 느리고 둘이 어긋날 수 있다
     try:
         landmarks, seg_mask = run_pose(person)
@@ -167,13 +226,12 @@ def photo_status(person):
     check = check_photo(person, landmarks, seg_mask)
     guide = draw_guide(person, landmarks, check) if landmarks else None
     if check.ok and not check.warnings:
-        return '✅ ' + check.message(), guide
-    mark = '❌' if check.errors else '⚠️'
-    lines = [f'{mark} ' + line for line in check.message().splitlines()]
+        return _note('ok', [check.message()]), guide
+    lines = check.message().splitlines()
     if check.errors:
-        lines.append('')
-        lines.append('다시 찍기 어렵다면 아래 **사진 검사 무시하고 합성**을 켜고 진행할 수 있어요 (결과가 나빠질 수 있어요).')
-    return '\n\n'.join(lines), guide
+        lines.append('다시 찍기 어렵다면 **고급 설정 › 사진 검사 무시하고 합성**을 켜고 진행할 수 있어요 '
+                     '(결과가 나빠질 수 있어요).')
+    return _note('err' if check.errors else 'warn', lines), guide
 
 
 def garment_status(garment, garment_photo_label):
@@ -184,9 +242,7 @@ def garment_status(garment, garment_photo_label):
     if garment is None:
         return ''
     check = check_garment(garment, photo_type=GARMENT_PHOTO_LABELS.get(garment_photo_label, 'flat-lay'))
-    if check.suitable:
-        return '✅ ' + check.message()
-    return '\n\n'.join('⚠️ ' + line for line in check.message().splitlines())
+    return _note('ok' if check.suitable else 'warn', check.message().splitlines())
 
 
 def postprocess(person, result, cloth_type):
@@ -215,7 +271,7 @@ def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
     if not ignore_photo_check:
         check = check_photo(person)
         if not check.ok:
-            raise gr.Error(check.message() + '\n(그대로 해보려면 "사진 검사 무시하고 합성"을 켜세요)')
+            raise gr.Error(check.message() + '\n(그대로 해보려면 고급 설정에서 "사진 검사 무시하고 합성"을 켜세요)')
 
     advice = size_advice(chart_file, height, shoulder, chest, waist)
 
@@ -252,7 +308,8 @@ def run(person, garment, cloth_label, garment_photo_label, ignore_photo_check,
         info += ' · ' + notes[-1]
     if count > 1:
         info += '\n\n마음에 드는 결과의 시드를 고급 설정에 넣으면 같은 결과를 다시 볼 수 있어요.'
-    return gallery, advice, info
+    # 첫 장(후처리 결과)을 크게 펼쳐 보여 준다. 나머지는 아래 썸네일
+    return gr.Gallery(value=gallery, selected_index=0), advice, info
 
 
 def _examples():
@@ -264,51 +321,52 @@ def _examples():
     return [[person[0], garment[0], '상의', '착용 사진 (사람이 입고 찍음)']]
 
 
-with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
-    gr.Markdown(
-        '# 가상 피팅 데모\n'
-        '인물 사진과 옷 사진을 올리고 옷 종류를 고르면 합성 결과가 나옵니다 (FASHN VTON v1.5).\n\n'
-        '- 인물은 **정면, 머리부터 발끝까지 화면을 꽉 채운** 사진일수록 결과가 좋습니다\n'
-        '- T4 GPU 기준 한 장에 약 50초 (25스텝). 고급 설정에서 후보를 여러 장 뽑으면 그만큼 늘어납니다'
-    )
+# gradio 6부터 theme·css·head 는 Blocks() 가 아니라 launch() 인자다 (Colab은 최신을 설치한다)
+GRADIO6 = int(gr.__version__.split('.')[0]) >= 6
 
-    with gr.Row():
-        with gr.Column():
-            person_in = gr.Image(label='인물 사진', type='pil', height=400)
-            photo_status_out = gr.Markdown(
-                '인물 사진을 올리면 자세·거리를 먼저 검사해요 '
-                '(정면 · 팔은 몸에서 주먹 하나 · 머리부터 발끝까지 화면 가득).')
-            # 초록 = 통과, 빨강 = 다시 찍기. 노란 막대 = 필요한 코~발목 길이, 그 옆 막대 = 사진 속 길이 (app/photo_guide.py)
-            photo_guide_out = gr.Image(label='사진 검사 (초록 통과 · 빨강 다시 찍기 · 노랑 필요한 길이)',
-                                       type='pil', height=400, interactive=False)
-            garment_in = gr.Image(label='옷 사진', type='pil', height=400)
-            garment_status_out = gr.Markdown()
-            cloth_in = gr.Radio(
-                choices=list(CLOTH_LABELS.keys()),
-                value='상의',
-                label='옷 종류',
-            )
-            garment_photo_in = gr.Radio(
-                choices=list(GARMENT_PHOTO_LABELS.keys()),
-                value='상품 사진 (옷만 펴 놓고 찍음)',
-                label='옷 사진 종류',
-            )
-            with gr.Accordion('내 신체 치수 (사이즈 추천용)', open=True):
-                gr.Markdown(
-                    '아는 항목만 넣어도 됩니다. **둘레**로 입력하면 치수표의 단면과 '
-                    '자동으로 맞춰 계산합니다 (가슴둘레 96 → 가슴단면 48). '
-                    '**레귤러핏 옷 기준**으로 추천해요 — 오버핏으로 나온 옷은 크게 추천될 수 있어요.'
-                )
+with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE)) as demo:
+    gr.HTML(HEADER_HTML, padding=False)
+
+    with gr.Row(equal_height=False, elem_classes='fc-main'):
+        with gr.Column(scale=5, elem_classes='fc-panel'):
+            gr.HTML(section('01', '내 사진', '정면 · 전신 · 3:4 세로 사진'), padding=False)
+            with gr.Row():
+                person_in = gr.Image(label='인물 사진', type='pil', height=360)
+                # 초록 = 통과, 빨강 = 다시 찍기. 노란 막대 = 필요한 코~발목 길이, 그 옆 막대 = 사진 속 길이 (app/photo_guide.py)
+                photo_guide_out = gr.Image(label='사진 검사 · 초록 통과 · 빨강 다시 찍기',
+                                           type='pil', height=360, interactive=False)
+            photo_status_out = gr.HTML(PHOTO_HINT, padding=False)
+
+            gr.HTML(section('02', '옷', '배경이 깔끔한 상품 사진일수록 좋아요'), padding=False)
+            with gr.Row():
+                garment_in = gr.Image(label='옷 사진', type='pil', height=360)
+                with gr.Column():
+                    cloth_in = gr.Radio(
+                        choices=list(CLOTH_LABELS.keys()),
+                        value='상의',
+                        label='옷 종류',
+                    )
+                    garment_photo_in = gr.Radio(
+                        choices=list(GARMENT_PHOTO_LABELS.keys()),
+                        value='상품 사진 (옷만 펴 놓고 찍음)',
+                        label='옷 사진 종류',
+                    )
+                    garment_status_out = gr.HTML('', padding=False)
+
+            gr.HTML(section('03', '내 치수', '아는 항목만 · 둘레로 입력'), padding=False)
+            with gr.Row():
                 height_in = gr.Number(value=175, label='키 (cm)')
-                shoulder_in = gr.Number(value=None, label='어깨너비 (cm, 폭)')
-                chest_in = gr.Number(value=None, label='가슴둘레 (cm)')
-                waist_in = gr.Number(value=None, label='허리둘레 (cm)')
-                _initial = list_charts('upper')
-                chart_in = gr.Dropdown(
-                    choices=_initial, value=(_initial or [None])[0],
-                    label='옷 치수표 (선택한 옷 종류에 맞춰 자동 변경)',
-                )
-            size_btn = gr.Button('사이즈만 추천받기 (합성 없이 바로)')
+                shoulder_in = gr.Number(value=None, label='어깨너비 (cm)', placeholder='모르면 비워 두기')
+            with gr.Row():
+                chest_in = gr.Number(value=None, label='가슴둘레 (cm)', placeholder='모르면 비워 두기')
+                waist_in = gr.Number(value=None, label='허리둘레 (cm)', placeholder='모르면 비워 두기')
+            _initial = list_charts('upper')
+            chart_in = gr.Dropdown(
+                choices=_initial, value=(_initial or [None])[0],
+                label='옷 치수표 (옷 종류에 맞춰 바뀜)',
+            )
+            gr.HTML('<p class="fc-help">둘레로 넣으면 치수표의 단면과 자동으로 맞춰요 (가슴둘레 96 → 단면 48). '
+                    '레귤러핏 옷 기준이라, 오버핏으로 나온 옷은 크게 추천될 수 있어요.</p>', padding=False)
 
             with gr.Accordion('고급 설정', open=False):
                 ignore_check_in = gr.Checkbox(
@@ -333,12 +391,16 @@ with gr.Blocks(title='사이즈 반영 가상 피팅') as demo:
                     value=True, label='후처리: 얼굴·손·배경은 원본 사진으로 되돌리기',
                     info='합성은 사진 전체를 다시 그려 얼굴까지 조금 바뀐다. 옷 자리만 합성 결과를 쓴다 (약 3초).',
                 )
-            run_btn = gr.Button('피팅 해보기', variant='primary')
+            with gr.Row(elem_classes='fc-actions'):
+                size_btn = gr.Button('사이즈만 보기', variant='secondary', size='lg', scale=2)
+                run_btn = gr.Button('피팅 해보기', variant='primary', size='lg', scale=3, elem_classes='fc-cta')
 
-        with gr.Column():
-            result_out = gr.Gallery(label='합성 결과', height=520, columns=2, object_fit='contain')
-            info_out = gr.Markdown()
-            size_out = gr.Markdown(label='사이즈 추천')
+        with gr.Column(scale=6, elem_classes='fc-result'):
+            gr.HTML(section('04', '피팅 결과', '한 장 약 50초 · T4 GPU'), padding=False)
+            result_out = gr.Gallery(label='피팅 결과', show_label=False, height=640, columns=2,
+                                    object_fit='contain', preview=True)
+            info_out = gr.Markdown(elem_classes='fc-info')
+            size_out = gr.HTML(size_advice(None, None, None, None, None), padding=False)
 
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
@@ -378,7 +440,7 @@ if __name__ == '__main__':
     #   단 gradio 6에서 이 인자가 없어져 TypeError가 난다(Colab 2026-09-16) → 빼고 다시 띄운다.
     # prevent_thread_lock=True로 먼저 URL을 받아 직접 flush 출력한다.
     # (gradio 자체 print는 flush를 안 해서 파이프로 실행하면 링크가 안 보인다)
-    options = dict(share=True, show_error=True, prevent_thread_lock=True)
+    options = dict(share=True, show_error=True, prevent_thread_lock=True, **(STYLE if GRADIO6 else {}))
     try:
         _, local_url, share_url = demo.queue().launch(show_api=False, **options)
     except TypeError:

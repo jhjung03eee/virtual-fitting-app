@@ -299,9 +299,11 @@ def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
     )
 
 
-def size_unknown_only(chart_file, height, sex, weight, shoulder, chest, waist):
-    """치수를 몰라요 버튼: 키·몸무게로 추천 (합성 없음)."""
+def size_unknown_only(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
+    """치수를 몰라요 버튼: 키·몸무게로 추천 (합성 없음). 상자 안 키가 비어 있으면 위 '내 치수'의 키를 쓴다."""
     start = time.perf_counter()
+    if unknown_height not in (None, '', 0):
+        height = unknown_height
     advice = size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
     return advice, sec('03', time.perf_counter() - start)
 
@@ -331,7 +333,7 @@ UNKNOWN_HEAD_HTML = """
 </style>
 <span class="fc-unknown__badge">NEW · 치수를 몰라요</span>
 <p class="fc-unknown__title">줄자 없이, 키·몸무게로 내 사이즈 찾기</p>
-<p class="fc-unknown__desc">위에 <b>키</b>를 넣고, 아래 <b>성별·몸무게</b>만 고르면 돼요.
+<p class="fc-unknown__desc">아래 <b>성별 · 키 · 몸무게</b>만 넣으면 돼요.
 어깨·가슴·허리를 예측해 <b>사이즈마다 맞을 확률</b>을 보여 주고, 가장 확률이 큰 사이즈를 추천해요.</p>
 <p class="fc-help">한국인 5,092명(사이즈코리아 8차)으로 배운 식 · 위 칸에 줄자로 잰 값이 있으면 그 값을 그대로 써요</p>
 """
@@ -490,7 +492,11 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                 gr.HTML(UNKNOWN_HEAD_HTML, padding=False)
                 with gr.Row():
                     sex_in = gr.Radio(choices=['남', '여'], value=None, label='성별', elem_classes='fc-unknown__field')
-                    weight_in = gr.Number(value=None, label='몸무게 (kg)', elem_classes='fc-unknown__field')
+                with gr.Row():
+                    unknown_height_in = gr.Number(value=None, label='키 (cm)', placeholder='예: 172',
+                                                  elem_classes='fc-unknown__field')
+                    weight_in = gr.Number(value=None, label='몸무게 (kg)', placeholder='예: 68',
+                                          elem_classes='fc-unknown__field')
                 unknown_btn = gr.Button('키·몸무게로 내 사이즈 찾기', variant='primary', size='lg',
                                         elem_classes='fc-unknown__btn')
 
@@ -528,7 +534,7 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
     )
     unknown_btn.click(
         fn=size_unknown_only,
-        inputs=[chart_in, height_in, sex_in, weight_in, shoulder_in, chest_in, waist_in],
+        inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
         outputs=[size_out, sec3_out],
     )
 

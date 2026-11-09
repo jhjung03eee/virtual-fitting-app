@@ -46,12 +46,14 @@ _gcu.get_type = _safe_get_type
 from fashn_core import (try_on, load_models, warmup, CATEGORY_BY_CLOTH_TYPE,
                         DEFAULT_STEPS, DEFAULT_GUIDANCE, DEFAULT_SEED)
 from body_profile import BodyProfile
+from chart_ocr import prepare_readers, read_chart_image as read_chart_with_ocr
+from chart_upload import ChartReadError, chart_from_text, chart_to_json, read_chart_image as read_chart_with_api, save_chart
 from garment_check import check_garment
 from photo_check import check_photo, run_pose
 from photo_guide import draw_guide
 from restore_original import restore_original
 from size_fit import SizeChart, ko, recommend
-from size_unknown import CONFIDENT, recommend_unknown
+from size_unknown import CONFIDENT, recommend_unknown, size_input_mode
 from ui_style import HEADER_HTML, STYLE, section
 
 # 이너·아우터는 FASHN에서 상의와 같은 처리라(fashn_core.CATEGORY_BY_CLOTH_TYPE) 화면에서는 뺐다
@@ -220,17 +222,74 @@ def sec(num, seconds=None):
     return section(num, title, hint, secs(seconds) if seconds is not None else None)
 
 
-def size_only(chart_file, height, shoulder, chest, waist):
+def auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist) -> str:
+    """입력 치수가 충분하면 그대로 추천하고, 모자라면 키·몸무게 추정으로 추천한다."""
+    if not chart_file:
+        return size_advice(chart_file, height, shoulder, chest, waist)
+    if unknown_height not in (None, '', 0):
+        height = unknown_height
+    measured = {'shoulder_cm': shoulder, 'chest_circumference_cm': chest, 'waist_circumference_cm': waist}
+    mode = size_input_mode(load_chart(chart_file).category, sex, height, weight, measured)
+    if mode == 'estimate':
+        return size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
+    if mode == 'missing':
+        return ('<div class="fc-size"><p class="fc-eyebrow">Size</p>'
+                '<h3 class="fc-size__title">입력값을 확인해주세요</h3>'
+                '<p class="fc-size__msg">치수를 모르면 성별 · 키 · 몸무게를 넣어 주세요. 치수를 추정해 추천해 드려요.</p></div>')
+    return size_advice(chart_file, height, shoulder, chest, waist)
+
+
+def size_only(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
     """합성 없이 사이즈 추천만 바로 보여준다 (합성은 한 장에 약 50초)."""
     start = time.perf_counter()
-    advice = size_advice(chart_file, height, shoulder, chest, waist)
+    advice = auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist)
     return advice, sec('03', time.perf_counter() - start)
+
+
+def _chart_result(chart, problems, cloth_label):
+    """검사한 치수표를 저장하고 (안내, 드롭다운, JSON, 파일)을 돌려준다. 쓸 수 없으면 드롭다운을 그대로 둔다."""
+    if chart is None:
+        return _note('err', problems or ['치수표를 읽지 못했습니다.']), gr.update(), gr.update(), None
+    filename = save_chart(chart, CHART_DIR)
+    cloth_type = CLOTH_LABELS.get(cloth_label, 'upper')
+    current = 'lower' if cloth_type == 'lower' else 'upper'
+    choices = list_charts(current)
+    lines = [f'**{chart.name}** 치수표를 저장했어요. 사이즈 {len(chart.sizes)}개 · 숫자가 사진과 같은지 확인해 주세요.']
+    level = 'ok'
+    if chart.category != current:
+        choices.append(filename)
+        lines.append(f'이 치수표는 {"하의" if chart.category == "lower" else "상의"}인데 옷 종류는 {cloth_label}로 선택돼 있어요.')
+        level = 'warn'
+    if problems:
+        lines += problems
+        level = 'warn'
+    return (_note(level, lines), gr.update(choices=choices, value=filename), chart_to_json(chart),
+            os.path.join(CHART_DIR, filename))
+
+
+def read_chart_photo(image, cloth_label):
+    """치수표 사진을 올리면 자동으로 읽어 JSON 파일로 저장하고 드롭다운에서 고른다."""
+    if image is None:
+        return '', gr.update(), gr.update(), None
+    # 기본은 비용이 없는 OCR. Claude API는 CHART_READER=claude 로 명시했을 때만 쓴다
+    reader = read_chart_with_api if os.environ.get('CHART_READER') == 'claude' else read_chart_with_ocr
+    try:
+        chart, problems = reader(image)
+    except ChartReadError as error:
+        return _note('err', [str(error)]), gr.update(), gr.update(), None
+    return _chart_result(chart, problems, cloth_label)
+
+
+def save_chart_text(text, cloth_label):
+    """고치거나 직접 넣은 JSON을 다시 검사해 새 파일로 저장한다."""
+    chart, problems = chart_from_text(text)
+    return _chart_result(chart, problems, cloth_label)
 
 
 # ---- 치수를 몰라요: 키·몸무게 → 예측 치수 → 사이즈별 맞을 확률 (app/size_unknown.py, PLAN.md F-37) ----
 # 위의 size_advice·_recommend 는 그대로 두고, 같은 카드 모양으로 확률 막대만 더해 그린다.
 def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist) -> str:
-    head = '<p class="fc-eyebrow">Size · 치수를 몰라요</p>'
+    head = '<p class="fc-eyebrow">Size · 키·몸무게로 추정한 치수로 추천</p>'
 
     def fail(title, lines):
         return (f'<div class="fc-size">{head}<h3 class="fc-size__title">{html.escape(title)}</h3>'
@@ -275,7 +334,8 @@ def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
             f'{html.escape(d.label)}</span></td>' for d in by_size[size].dimensions)
         pick = ' class="is-pick"' if size == best.size else ''
         rows.append(f'<tr{pick}><td class="fc-size__name">{html.escape(size)}</td>{cells}</tr>')
-    notes = [f'키·몸무게로 예측한 치수: {" · ".join(u.prediction.sources)} (사이즈코리아 8차 회귀, Bartol 외 2022 방식)',
+    notes = [f'입력: {sex} · 키 {float(height):g}cm · 몸무게 {float(weight):g}kg',
+             f'키·몸무게로 예측한 치수: {" · ".join(u.prediction.sources)} (사이즈코리아 8차 회귀, Bartol 외 2022 방식)',
              f'예측 오차만큼 흔든 몸 {u.samples}개로 사이즈마다 맞을 확률을 계산해, 가장 큰 {best.size}를 추천합니다.']
     if u.point_best and u.point_best != best.size:
         notes.append(f'예측값 한 점으로만 보면 {u.point_best} 입니다.')
@@ -402,7 +462,7 @@ def postprocess(person, result, cloth_type):
 
 
 def run(person, garment, cloth_label, garment_photo_label,
-        chart_file, height, shoulder, chest, waist, progress=gr.Progress()):
+        chart_file, height, sex, unknown_height, weight, shoulder, chest, waist, progress=gr.Progress()):
     """합성 → 후처리 → 사이즈 추천. 설정은 엔진 기본값으로 고정한다(스텝 25 · guidance 2.5 · 시드 42).
 
     고급 설정(스텝·시드·후보 장수·후처리 끄기·사진 검사 무시)과 후처리 전후 비교는 2026-11-02에 뺐다.
@@ -416,7 +476,7 @@ def run(person, garment, cloth_label, garment_photo_label,
         raise gr.Error(check.message() + '\n사진 검사 안내대로 다시 찍어 올려 주세요.')
 
     start = time.perf_counter()
-    advice = size_advice(chart_file, height, shoulder, chest, waist)
+    advice = auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist)
     size_header = sec('03', time.perf_counter() - start)
 
     cloth_type = CLOTH_LABELS[cloth_label]
@@ -483,6 +543,15 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                 choices=_initial, value=(_initial or [None])[0],
                 label='옷 치수표 (옷 종류에 맞춰 바뀜)',
             )
+            with gr.Group():
+                chart_photo_in = gr.Image(label='치수표 사진 올리기 · 올리면 자동으로 읽어요', type='pil', height=220)
+                chart_status_out = gr.HTML(
+                    '<p class="fc-help">쇼핑몰의 실측 사이즈 표를 캡처해 올리면 JSON 파일로 저장하고 위 목록에서 골라요. '
+                    '읽기가 끝나면 숫자를 확인한 뒤 사이즈를 보세요.</p>', padding=False)
+                chart_json_in = gr.Code(label='읽은 치수표 JSON · 틀린 숫자는 고칠 수 있어요', language='json',
+                                        interactive=True, lines=8)
+                chart_save_btn = gr.Button('JSON 내용으로 저장', variant='secondary')
+                chart_file_out = gr.File(label='JSON 파일', interactive=False, height=90)
             gr.HTML('<p class="fc-help">둘레로 넣으면 치수표의 단면과 자동으로 맞춰요 (가슴둘레 96 → 단면 48). '
                     '레귤러핏 옷 기준이라, 오버핏으로 나온 옷은 크게 추천될 수 있어요.</p>', padding=False)
             # 새 항목 (F-37): 치수를 모를 때 키·몸무게로 추천. 위 칸에 줄자로 잰 값이 있으면 그 항목은 그대로 쓴다
@@ -524,14 +593,19 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
     run_btn.click(
         fn=run,
         inputs=[person_in, garment_in, cloth_in, garment_photo_in,
-                chart_in, height_in, shoulder_in, chest_in, waist_in],
+                chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
         outputs=[result_out, size_out, info_out, sec3_out, sec4_out],
     )
     size_btn.click(
         fn=size_only,
-        inputs=[chart_in, height_in, shoulder_in, chest_in, waist_in],
+        inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
         outputs=[size_out, sec3_out],
     )
+    # 치수표 사진은 올리는 순간 읽는다. 잘못 읽은 숫자는 JSON 칸에서 고쳐 다시 저장한다
+    chart_photo_in.upload(fn=read_chart_photo, inputs=[chart_photo_in, cloth_in],
+                          outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out])
+    chart_save_btn.click(fn=save_chart_text, inputs=[chart_json_in, cloth_in],
+                         outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out])
     unknown_btn.click(
         fn=size_unknown_only,
         inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
@@ -545,6 +619,10 @@ if __name__ == '__main__':
     # 첫 사용자가 컴파일 시간(약 90초)을 떠안지 않게 미리 한 장 돌려 둔다
     print('준비 운동 중... (torch.compile, 약 1~2분)', flush=True)
     print('준비 운동 완료:', warmup(), '초', flush=True)
+    print('치수표 글자 인식 모델 준비 중...', flush=True)
+    ocr_problem = prepare_readers()
+    if ocr_problem:
+        print('치수표 사진 읽기를 쓸 수 없습니다:', ocr_problem, flush=True)
     print('로딩 완료. Gradio 실행합니다.', flush=True)
     # show_api=False: API 스키마 생성 경로(gradio_client)가 pydantic 버전에 따라 터지는 걸 회피.
     #   단 gradio 6에서 이 인자가 없어져 TypeError가 난다(Colab 2026-09-16) → 빼고 다시 띄운다.

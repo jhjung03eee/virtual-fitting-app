@@ -165,6 +165,21 @@ def size_probabilities(chart: SizeChart, pred: Prediction, samples: int = DEFAUL
     return {s: (c / used if used else 0.0) for s, c in counts.items()}
 
 
+def size_input_mode(category: str, sex, height_cm, weight_kg, measured: Dict[str, float]) -> str:
+    """입력으로 어떤 추천을 할지 고른다: 'measured'(입력 치수) · 'estimate'(키·몸무게 추정) · 'missing'(입력 부족).
+
+    옷에 필요한 치수를 모두 줄자로 쟀으면 추정하지 않는다. 일부만 있으면 빈 칸을 추정으로 채운다.
+    추정에 필요한 값이 없으면 지금까지처럼 입력한 치수만으로 추천한다.
+    """
+    needed = PREDICT.get(category)
+    filled = {k for k, v in measured.items() if v not in (None, '', 0)}
+    if needed is None or set(needed) <= filled:
+        return 'measured'
+    if sex and height_cm not in (None, '', 0) and weight_kg not in (None, '', 0):
+        return 'estimate'
+    return 'measured' if filled else 'missing'
+
+
 def recommend_unknown(chart: SizeChart, sex: str, height_cm: float, weight_kg: float,
                       measured: Optional[Dict[str, float]] = None, samples: int = DEFAULT_SAMPLES,
                       model: Optional[dict] = None) -> UnknownRecommendation:

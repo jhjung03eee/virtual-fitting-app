@@ -17,3 +17,6 @@ data/fit_eval/garments.csv
 
 # mediapipe 모델 파일은 실행 때 내려받는다
 .scratch/mediapipe/*.tflite
+
+# 앱에서 올린 치수표 사진으로 만든 파일
+data/size_charts/uploaded_*.json

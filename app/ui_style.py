@@ -77,7 +77,7 @@ def _palette_css():
 
 CSS = _palette_css() + """
 .gradio-container { max-width: 1280px !important; margin: 0 auto !important; padding: 0 28px 72px !important;
-  background: var(--fc-bg) !important; }
+  background: var(--fc-bg) !important; word-break: keep-all; overflow-wrap: break-word; }
 footer { display: none !important; }
 .gradio-container, .gradio-container button, .gradio-container input, .gradio-container textarea {
   font-family: 'Pretendard Variable', Pretendard, 'Noto Sans KR', sans-serif !important; letter-spacing: -0.01em; }

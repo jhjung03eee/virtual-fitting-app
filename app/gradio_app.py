@@ -115,6 +115,8 @@ def _recommend(chart_file, height, shoulder, chest, waist):
     """(치수표, 추천, None) 또는 (None, None, (제목, [문구]))."""
     if not chart_file:
         return None, None, (None, ['치수표가 없어 사이즈 추천을 건너뜁니다.'])
+    # gradio 버전에 따라 빈 칸이 0으로 넘어온다. 0cm인 몸은 없으니 '모름'으로 친다
+    height, shoulder, chest, waist = (v or None for v in (height, shoulder, chest, waist))
     try:
         profile = BodyProfile.from_inputs(
             height_cm=height, shoulder_cm=shoulder, chest_circumference_cm=chest,
@@ -381,7 +383,11 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
             sec4_out = gr.HTML(sec('04'), padding=False)
             result_out = gr.Image(label='피팅 결과', show_label=False, type='pil', height=640, interactive=False)
             info_out = gr.Markdown(elem_classes='fc-info')
-            size_out = gr.HTML(size_advice(None, None, None, None, None), padding=False)
+            # 아직 아무것도 안 눌렀을 때의 안내. size_advice 를 부르면 '치수표가 없어'가 떠서 직접 쓴다
+            size_out = gr.HTML(
+                '<div class="fc-size"><p class="fc-eyebrow">Size</p>'
+                '<p class="fc-size__msg">내 치수를 넣고 <b>사이즈만 보기</b>를 누르면 '
+                '추천 사이즈가 여기 나옵니다.</p></div>', padding=False)
 
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])

@@ -1,0 +1,273 @@
+﻿python.exe : [Parallel(n_jobs=-1)]: Using backend LokyBackend with 8 concurrent workers.
+At line:1 char:533
++ ... EADS = "1"; & "$bm\venv\Scripts\python.exe" "$p\run_comparison.py" "$ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([Parallel(n_job...urrent workers.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[Parallel(n_jobs=-1)]: Done   4 out of  15 | elapsed:  1.6min remaining:  4.3min
+[Parallel(n_jobs=-1)]: Done   8 out of  15 | elapsed:  1.7min remaining:  1.5min
+[Parallel(n_jobs=-1)]: Done  12 out of  15 | elapsed:  3.7min remaining:   55.3s
+[Parallel(n_jobs=-1)]: Done  15 out of  15 | elapsed:  3.8min finished
+결측 코드 제거 (어깨사이길이) 1 건
+
+[평균 절대오차 cm]
+
+-- 전체
+target                  가슴둘레  젖가슴둘레  허리둘레  어깨사이길이(표면)  어깨너비(직선)
+model                                                          
+mean                    5.06   6.01  7.17        1.80      1.38
+linear                  2.31   2.55  3.16        1.50      1.11
+linear_terms            2.26   2.51  3.10        1.50      1.11
+linear_age              2.29   2.46  2.63        1.48      1.11
+linear_terms_age        2.26   2.44  2.59        1.48      1.11
+mlp_single              2.27   2.52  3.10        1.50      1.11
+mlp_ensemble            2.26   2.50  3.09        1.50      1.11
+mlp_age_single          2.26   2.44  2.59        1.48      1.11
+mlp_age_ensemble        2.25   2.42  2.58        1.47      1.11
+linear|noisy            2.43   2.71  3.35        1.51      1.12
+linear_terms|noisy      2.41   2.70  3.31        1.50      1.12
+linear_terms_age|noisy  2.40   2.62  2.81        1.49      1.12
+mlp_ensemble|noisy      2.41   2.69  3.30        1.50      1.12
+mlp_age_ensemble|noisy  2.39   2.60  2.80        1.48      1.12
+
+-- 남
+target                  가슴둘레  젖가슴둘레  허리둘레  어깨사이길이(표면)  어깨너비(직선)
+model                                                          
+mean                    5.12   5.37  7.07        1.94      1.51
+linear                  2.48   2.36  3.36        1.60      1.19
+linear_terms            2.44   2.34  3.34        1.60      1.19
+linear_age              2.48   2.34  2.72        1.57      1.19
+linear_terms_age        2.43   2.32  2.70        1.57      1.19
+mlp_single              2.44   2.36  3.34        1.60      1.19
+mlp_ensemble            2.43   2.34  3.33        1.60      1.19
+mlp_age_single          2.43   2.34  2.70        1.56      1.18
+mlp_age_ensemble        2.41   2.32  2.68        1.56      1.18
+linear|noisy            2.57   2.48  3.53        1.61      1.20
+linear_terms|noisy      2.54   2.47  3.51        1.61      1.20
+linear_terms_age|noisy  2.54   2.45  2.88        1.57      1.19
+mlp_ensemble|noisy      2.53   2.48  3.51        1.61      1.20
+mlp_age_ensemble|noisy  2.52   2.46  2.87        1.57      1.19
+
+-- 여
+target                  가슴둘레  젖가슴둘레  허리둘레  어깨사이길이(표면)  어깨너비(직선)
+model                                                          
+mean                    5.02   6.53  7.24        1.69      1.28
+linear                  2.16   2.71  3.00        1.41      1.05
+linear_terms            2.12   2.65  2.90        1.41      1.05
+linear_age              2.14   2.57  2.56        1.41      1.05
+linear_terms_age        2.11   2.54  2.51        1.41      1.05
+mlp_single              2.13   2.65  2.91        1.42      1.05
+mlp_ensemble            2.12   2.64  2.89        1.41      1.05
+mlp_age_single          2.12   2.53  2.50        1.40      1.05
+mlp_age_ensemble        2.11   2.51  2.49        1.40      1.05
+linear|noisy            2.32   2.91  3.21        1.42      1.05
+linear_terms|noisy      2.31   2.88  3.14        1.42      1.05
+linear_terms_age|noisy  2.29   2.76  2.76        1.42      1.05
+mlp_ensemble|noisy      2.31   2.86  3.13        1.42      1.06
+mlp_age_ensemble|noisy  2.28   2.72  2.73        1.41      1.05
+
+[MAE 차이와 95% 구간: 앞 모델 - 뒤 모델, 음수면 앞 모델이 더 정확]
+               a                b group     target  diff_cm    low   high
+    linear_terms           linear    전체       가슴둘레   -0.041 -0.056 -0.028
+    linear_terms           linear    전체      젖가슴둘레   -0.039 -0.055 -0.023
+    linear_terms           linear    전체       허리둘레   -0.066 -0.088 -0.046
+    linear_terms           linear    전체 어깨사이길이(표면)   -0.001 -0.004  0.001
+    linear_terms           linear    전체   어깨너비(직선)    0.001 -0.002  0.003
+    linear_terms           linear     남       가슴둘레   -0.045 -0.067 -0.024
+    linear_terms           linear     남      젖가슴둘레   -0.017 -0.034 -0.001
+    linear_terms           linear     남       허리둘레   -0.019 -0.039 -0.000
+    linear_terms           linear     남 어깨사이길이(표면)   -0.004 -0.009  0.000
+    linear_terms           linear     남   어깨너비(직선)   -0.000 -0.003  0.003
+    linear_terms           linear     여       가슴둘레   -0.039 -0.057 -0.020
+    linear_terms           linear     여      젖가슴둘레   -0.057 -0.084 -0.031
+    linear_terms           linear     여       허리둘레   -0.105 -0.140 -0.071
+    linear_terms           linear     여 어깨사이길이(표면)    0.001 -0.000  0.003
+    linear_terms           linear     여   어깨너비(직선)    0.001 -0.002  0.005
+    mlp_ensemble           linear    전체       가슴둘레   -0.043 -0.059 -0.028
+    mlp_ensemble           linear    전체      젖가슴둘레   -0.047 -0.065 -0.029
+    mlp_ensemble           linear    전체       허리둘레   -0.070 -0.092 -0.049
+    mlp_ensemble           linear    전체 어깨사이길이(표면)   -0.002 -0.005  0.001
+    mlp_ensemble           linear    전체   어깨너비(직선)    0.001 -0.001  0.004
+    mlp_ensemble           linear     남       가슴둘레   -0.047 -0.070 -0.025
+    mlp_ensemble           linear     남      젖가슴둘레   -0.014 -0.031  0.003
+    mlp_ensemble           linear     남       허리둘레   -0.021 -0.045  0.000
+    mlp_ensemble           linear     남 어깨사이길이(표면)   -0.005 -0.010  0.000
+    mlp_ensemble           linear     남   어깨너비(직선)   -0.001 -0.005  0.003
+    mlp_ensemble           linear     여       가슴둘레   -0.040 -0.061 -0.019
+    mlp_ensemble           linear     여      젖가슴둘레   -0.074 -0.103 -0.046
+    mlp_ensemble           linear     여       허리둘레   -0.111 -0.146 -0.077
+    mlp_ensemble           linear     여 어깨사이길이(표면)    0.001 -0.003  0.004
+    mlp_ensemble           linear     여   어깨너비(직선)    0.003  0.000  0.006
+    mlp_ensemble     linear_terms    전체       가슴둘레   -0.002 -0.008  0.004
+    mlp_ensemble     linear_terms    전체      젖가슴둘레   -0.008 -0.017  0.000
+    mlp_ensemble     linear_terms    전체       허리둘레   -0.004 -0.015  0.006
+    mlp_ensemble     linear_terms    전체 어깨사이길이(표면)   -0.001 -0.002  0.002
+    mlp_ensemble     linear_terms    전체   어깨너비(직선)    0.001 -0.001  0.003
+    mlp_ensemble     linear_terms     남       가슴둘레   -0.002 -0.011  0.006
+    mlp_ensemble     linear_terms     남      젖가슴둘레    0.003 -0.005  0.011
+    mlp_ensemble     linear_terms     남       허리둘레   -0.003 -0.016  0.011
+    mlp_ensemble     linear_terms     남 어깨사이길이(표면)   -0.000 -0.004  0.002
+    mlp_ensemble     linear_terms     남   어깨너비(직선)   -0.001 -0.004  0.002
+    mlp_ensemble     linear_terms     여       가슴둘레   -0.001 -0.009  0.007
+    mlp_ensemble     linear_terms     여      젖가슴둘레   -0.017 -0.031 -0.002
+    mlp_ensemble     linear_terms     여       허리둘레   -0.006 -0.022  0.010
+    mlp_ensemble     linear_terms     여 어깨사이길이(표면)   -0.001 -0.003  0.002
+    mlp_ensemble     linear_terms     여   어깨너비(직선)    0.002 -0.001  0.004
+      mlp_single     linear_terms    전체       가슴둘레    0.007  0.001  0.014
+      mlp_single     linear_terms    전체      젖가슴둘레    0.004 -0.006  0.012
+      mlp_single     linear_terms    전체       허리둘레    0.006 -0.006  0.017
+      mlp_single     linear_terms    전체 어깨사이길이(표면)    0.002 -0.000  0.004
+      mlp_single     linear_terms    전체   어깨너비(직선)    0.002 -0.000  0.004
+      mlp_single     linear_terms     남       가슴둘레    0.008 -0.001  0.017
+      mlp_single     linear_terms     남      젖가슴둘레    0.017  0.007  0.027
+      mlp_single     linear_terms     남       허리둘레    0.002 -0.014  0.018
+      mlp_single     linear_terms     남 어깨사이길이(표면)    0.002 -0.001  0.006
+      mlp_single     linear_terms     남   어깨너비(직선)   -0.000 -0.003  0.003
+      mlp_single     linear_terms     여       가슴둘레    0.007 -0.002  0.016
+      mlp_single     linear_terms     여      젖가슴둘레   -0.008 -0.023  0.007
+      mlp_single     linear_terms     여       허리둘레    0.009 -0.008  0.027
+      mlp_single     linear_terms     여 어깨사이길이(표면)    0.002 -0.001  0.005
+      mlp_single     linear_terms     여   어깨너비(직선)    0.003  0.000  0.006
+linear_terms_age     linear_terms    전체       가슴둘레   -0.008 -0.014 -0.002
+linear_terms_age     linear_terms    전체      젖가슴둘레   -0.071 -0.090 -0.051
+linear_terms_age     linear_terms    전체       허리둘레   -0.504 -0.552 -0.454
+linear_terms_age     linear_terms    전체 어깨사이길이(표면)   -0.017 -0.025 -0.009
+linear_terms_age     linear_terms    전체   어깨너비(직선)   -0.002 -0.004  0.000
+linear_terms_age     linear_terms     남       가슴둘레   -0.003 -0.009  0.003
+linear_terms_age     linear_terms     남      젖가슴둘레   -0.017 -0.029 -0.004
+linear_terms_age     linear_terms     남       허리둘레   -0.640 -0.724 -0.560
+linear_terms_age     linear_terms     남 어깨사이길이(표면)   -0.035 -0.051 -0.017
+linear_terms_age     linear_terms     남   어깨너비(직선)   -0.003 -0.006  0.001
+linear_terms_age     linear_terms     여       가슴둘레   -0.012 -0.023 -0.001
+linear_terms_age     linear_terms     여      젖가슴둘레   -0.117 -0.150 -0.085
+linear_terms_age     linear_terms     여       허리둘레   -0.390 -0.447 -0.333
+linear_terms_age     linear_terms     여 어깨사이길이(표면)   -0.002 -0.006  0.003
+linear_terms_age     linear_terms     여   어깨너비(직선)   -0.001 -0.004  0.002
+linear_terms_age       linear_age    전체       가슴둘레   -0.037 -0.052 -0.023
+linear_terms_age       linear_age    전체      젖가슴둘레   -0.023 -0.036 -0.010
+linear_terms_age       linear_age    전체       허리둘레   -0.041 -0.057 -0.025
+linear_terms_age       linear_age    전체 어깨사이길이(표면)   -0.001 -0.003  0.001
+linear_terms_age       linear_age    전체   어깨너비(직선)    0.001 -0.001  0.003
+linear_terms_age       linear_age     남       가슴둘레   -0.049 -0.071 -0.028
+linear_terms_age       linear_age     남      젖가슴둘레   -0.014 -0.030  0.002
+linear_terms_age       linear_age     남       허리둘레   -0.026 -0.045 -0.008
+linear_terms_age       linear_age     남 어깨사이길이(표면)   -0.003 -0.008  0.001
+linear_terms_age       linear_age     남   어깨너비(직선)   -0.000 -0.003  0.003
+linear_terms_age       linear_age     여       가슴둘레   -0.027 -0.045 -0.010
+linear_terms_age       linear_age     여      젖가슴둘레   -0.030 -0.051 -0.010
+linear_terms_age       linear_age     여       허리둘레   -0.054 -0.080 -0.027
+linear_terms_age       linear_age     여 어깨사이길이(표면)    0.001 -0.001  0.003
+linear_terms_age       linear_age     여   어깨너비(직선)    0.002 -0.001  0.005
+mlp_age_ensemble linear_terms_age    전체       가슴둘레   -0.010 -0.019 -0.001
+mlp_age_ensemble linear_terms_age    전체      젖가슴둘레   -0.017 -0.029 -0.005
+mlp_age_ensemble linear_terms_age    전체       허리둘레   -0.014 -0.026  0.000
+mlp_age_ensemble linear_terms_age    전체 어깨사이길이(표면)   -0.009 -0.014 -0.004
+mlp_age_ensemble linear_terms_age    전체   어깨너비(직선)   -0.001 -0.004  0.001
+mlp_age_ensemble linear_terms_age     남       가슴둘레   -0.019 -0.033 -0.004
+mlp_age_ensemble linear_terms_age     남      젖가슴둘레   -0.001 -0.012  0.011
+mlp_age_ensemble linear_terms_age     남       허리둘레   -0.014 -0.032  0.003
+mlp_age_ensemble linear_terms_age     남 어깨사이길이(표면)   -0.007 -0.014  0.000
+mlp_age_ensemble linear_terms_age     남   어깨너비(직선)   -0.004 -0.009  0.001
+mlp_age_ensemble linear_terms_age     여       가슴둘레   -0.003 -0.013  0.008
+mlp_age_ensemble linear_terms_age     여      젖가슴둘레   -0.030 -0.052 -0.009
+mlp_age_ensemble linear_terms_age     여       허리둘레   -0.013 -0.034  0.008
+mlp_age_ensemble linear_terms_age     여 어깨사이길이(표면)   -0.011 -0.018 -0.004
+mlp_age_ensemble linear_terms_age     여   어깨너비(직선)    0.001 -0.002  0.004
+  mlp_age_single linear_terms_age    전체       가슴둘레    0.004 -0.005  0.014
+  mlp_age_single linear_terms_age    전체      젖가슴둘레    0.000 -0.012  0.014
+  mlp_age_single linear_terms_age    전체       허리둘레   -0.001 -0.015  0.014
+  mlp_age_single linear_terms_age    전체 어깨사이길이(표면)   -0.006 -0.012 -0.001
+  mlp_age_single linear_terms_age    전체   어깨너비(직선)    0.002 -0.002  0.005
+  mlp_age_single linear_terms_age     남       가슴둘레   -0.004 -0.021  0.013
+  mlp_age_single linear_terms_age     남      젖가슴둘레    0.011 -0.002  0.025
+  mlp_age_single linear_terms_age     남       허리둘레    0.004 -0.016  0.023
+  mlp_age_single linear_terms_age     남 어깨사이길이(표면)   -0.003 -0.010  0.005
+  mlp_age_single linear_terms_age     남   어깨너비(직선)   -0.002 -0.007  0.003
+  mlp_age_single linear_terms_age     여       가슴둘레    0.011 -0.001  0.023
+  mlp_age_single linear_terms_age     여      젖가슴둘레   -0.009 -0.031  0.014
+  mlp_age_single linear_terms_age     여       허리둘레   -0.005 -0.026  0.017
+  mlp_age_single linear_terms_age     여 어깨사이길이(표면)   -0.009 -0.017 -0.002
+  mlp_age_single linear_terms_age     여   어깨너비(직선)    0.005  0.001  0.008
+
+[사이즈 일치율: 실제 치수로 고른 사이즈 = 예측 치수로 고른 사이즈]
+
+어깨 기준 어깨사이길이(표면) / 전체 실제 사이즈 분포: {'M': 0.578, 'L': 0.246, 'XL': 0.176}
+
+어깨 기준 어깨사이길이(표면) / 남 실제 사이즈 분포: {'M': 0.214, 'L': 0.424, 'XL': 0.362}
+
+어깨 기준 어깨사이길이(표면) / 여 실제 사이즈 분포: {'M': 0.882, 'L': 0.097, 'XL': 0.021}
+
+어깨 기준 어깨너비(직선) / 전체 실제 사이즈 분포: {'M': 0.606, 'L': 0.245, 'XL': 0.149}
+
+어깨 기준 어깨너비(직선) / 남 실제 사이즈 분포: {'M': 0.267, 'L': 0.43, 'XL': 0.302}
+
+어깨 기준 어깨너비(직선) / 여 실제 사이즈 분포: {'M': 0.889, 'L': 0.091, 'XL': 0.021}
+shoulder               어깨너비(직선)               어깨사이길이(표면)              
+group                         남      여     전체          남      여     전체
+model                                                                 
+linear                    0.732  0.929  0.839      0.741  0.926  0.842
+linear_age                0.730  0.931  0.840      0.748  0.928  0.846
+linear_terms              0.735  0.932  0.842      0.745  0.930  0.845
+linear_terms_age          0.737  0.931  0.843      0.744  0.929  0.844
+linear_terms_age|noisy    0.730  0.926  0.837      0.741  0.924  0.841
+linear_terms|noisy        0.728  0.926  0.836      0.739  0.924  0.840
+linear|noisy              0.725  0.928  0.836      0.736  0.925  0.839
+mean                      0.430  0.889  0.680      0.424  0.882  0.674
+mlp_age_ensemble          0.738  0.931  0.843      0.745  0.929  0.845
+mlp_age_ensemble|noisy    0.728  0.926  0.835      0.740  0.923  0.840
+mlp_age_single            0.735  0.931  0.842      0.744  0.928  0.844
+mlp_ensemble              0.735  0.931  0.842      0.744  0.929  0.845
+mlp_ensemble|noisy        0.728  0.926  0.836      0.738  0.924  0.839
+mlp_single                0.737  0.931  0.843      0.743  0.928  0.844
+최다 사이즈만 추천                0.430  0.889  0.606      0.424  0.882  0.578
+
+[BMI 구간별 MAE, 남녀 전체]
+target                         가슴둘레  어깨사이길이(표면)  허리둘레
+bmi     n    model                                   
+18.5~25 3180 linear            2.18        1.48  3.01
+             linear_terms      2.15        1.48  2.97
+             linear_terms_age  2.14        1.45  2.46
+             mlp_age_ensemble  2.13        1.44  2.45
+             mlp_ensemble      2.15        1.48  2.97
+25~30   1433 linear            2.45        1.55  3.43
+             linear_terms      2.43        1.55  3.38
+             linear_terms_age  2.42        1.54  2.77
+             mlp_age_ensemble  2.40        1.53  2.76
+             mlp_ensemble      2.42        1.55  3.38
+<18.5   215  linear            2.18        1.47  2.35
+             linear_terms      1.97        1.48  2.13
+             linear_terms_age  1.99        1.47  2.25
+             mlp_age_ensemble  1.99        1.45  2.00
+             mlp_ensemble      1.98        1.47  2.00
+>=30    264  linear            3.18        1.52  4.22
+             linear_terms      3.01        1.52  3.84
+             linear_terms_age  3.03        1.53  3.53
+             mlp_age_ensemble  2.96        1.53  3.64
+             mlp_ensemble      3.00        1.52  3.93
+
+[MLP 시드에 따른 항목별 MAE 변동: 같은 분할 안 시드 간 범위의 평균 cm]
+{'가슴둘레': 0.022, '젖가슴둘레': 0.029, '허리둘레': 0.031, '어깨사이길이(표면)': 0.008, '어깨너비(직선)': 0.007}
+
+[MLP 선택 설정 횟수]
+{'hidden_layer_sizes': (64, 64), 'alpha': 0.01}      9
+{'hidden_layer_sizes': (32, 32), 'alpha': 0.01}      3
+{'hidden_layer_sizes': (64, 64), 'alpha': 0.0001}    1
+{'hidden_layer_sizes': (16,), 'alpha': 0.01}         1
+{'hidden_layer_sizes': (32, 32), 'alpha': 0.0001}    1
+
+[어깨 척도 확인: 가슴둘레 102~106cm 남성] 510 명
+      shoulder  shoulder_surface
+mean      40.0              45.0
+std        1.8               2.2
+25%       38.9              43.6
+75%       41.2              46.4
+46cm 이상 비율 | 어깨너비 0.0 | 어깨사이길이 0.312
+
+[계수 저장 완료] 재현 오차 최대 4.831690603168681e-13 cm
+
+[예시 예측: 저장 계수 사용, cm]
+M 175.0 75.0 25 {'가슴둘레': 101.6, '젖가슴둘레': 96.6, '허리둘레': 83.7, '어깨사이길이(표면)': 45.5, '어깨너비(직선)': 40.2}
+M 175.0 75.0 55 {'가슴둘레': 101.3, '젖가슴둘레': 97.3, '허리둘레': 89.0, '어깨사이길이(표면)': 44.5, '어깨너비(직선)': 40.0}
+F 160.0 55.0 25 {'가슴둘레': 86.5, '젖가슴둘레': 83.7, '허리둘레': 72.2, '어깨사이길이(표면)': 39.8, '어깨너비(직선)': 35.0}
+F 160.0 55.0 55 {'가슴둘레': 87.3, '젖가슴둘레': 86.0, '허리둘레': 76.6, '어깨사이길이(표면)': 39.5, '어깨너비(직선)': 35.2}

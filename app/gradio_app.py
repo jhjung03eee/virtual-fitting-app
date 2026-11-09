@@ -162,10 +162,12 @@ def size_advice(chart_file, height, shoulder, chest, waist) -> str:
         labels = {d.dimension: d.label for d in best.dimensions}
         verdict = f"{labels.get('chest') or labels.get('waist') or '레귤러'} 핏"
     else:
-        verdict = '모든 사이즈가 몸보다 작아요'
+        verdict = ('비교 가능한 사이즈는 모두 몸보다 작아요' if any(
+            not fit.scorable for fit in rec.ranked) else '모든 사이즈가 몸보다 작아요')
     chips = ''.join(
         f'<span class="fc-chip{" is-pick" if size == best.size else ""}'
-        f'{"" if by_size[size].wearable else " is-no"}">{html.escape(size)}</span>'
+        f'{" is-unknown" if not by_size[size].scorable else " is-no" if not by_size[size].wearable else ""}'
+        f'">{html.escape(size)}</span>'
         for size in chart.sizes)
 
     dims = [d.dimension for d in best.dimensions]
@@ -174,14 +176,17 @@ def size_advice(chart_file, height, shoulder, chest, waist) -> str:
     rows = []
     for size in chart.sizes:
         fit = by_size[size]
+        fit_dims = {d.dimension: d for d in fit.dimensions}
         cells = ''.join(
             f'<td>{d.ease_cm:+.1f}<span class="fc-tone tone-{FIT_TONE.get(d.label, "mute")}">'
-            f'{html.escape(d.label)}</span></td>' for d in fit.dimensions)
+            f'{html.escape(d.label)}</span></td>' if (d := fit_dims.get(dimension)) else '<td>-</td>'
+            for dimension in dims)
         if has_length:
             length = chart.sizes[size].get('length')
             cells += f'<td>{length:g}</td>' if length is not None else '<td>-</td>'
         pick = ' class="is-pick"' if size == best.size else ''
-        rows.append(f'<tr{pick}><td class="fc-size__name">{html.escape(size)}</td>{cells}</tr>')
+        name = html.escape(size) + (' <small>(판단 불가)</small>' if not fit.scorable else '')
+        rows.append(f'<tr{pick}><td class="fc-size__name">{name}</td>{cells}</tr>')
     notes = ''.join(f'<li>{html.escape(note)}</li>' for note in rec.notes)
     return (
         f'<div class="fc-size">{head}'

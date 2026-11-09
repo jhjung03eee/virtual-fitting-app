@@ -128,6 +128,11 @@ class SizeFit:
     wearable: bool
 
     @property
+    def scorable(self) -> bool:
+        """몸 치수와 실제로 비교한 항목이 하나 이상 있는지."""
+        return bool(self.dimensions)
+
+    @property
     def summary(self) -> str:
         parts = [f'{d.dimension} {d.ease_cm:+.1f}cm({d.label})' for d in self.dimensions]
         return f"{self.size}: {' / '.join(parts)}"
@@ -226,10 +231,15 @@ def recommend(chart: SizeChart, body_cm: Dict[str, float]) -> Recommendation:
         )
 
     fits = [evaluate_size(chart, size, body_cm) for size in chart.sizes]
-    # 입을 수 있는 것을 우선하고, 그 안에서 점수가 낮은 순
-    ranked = sorted(fits, key=lambda f: (not f.wearable, f.score))
+    # 비교할 치수가 없는 사이즈는 점수 0이라도 추천 후보로 보지 않는다.
+    ranked = sorted(fits, key=lambda f: (not f.scorable, not f.wearable, f.score))
+    unscorable = [f.size for f in fits if not f.scorable]
+    if unscorable:
+        notes.append(f"비교할 치수가 없어 판단할 수 없는 사이즈: {', '.join(unscorable)}")
 
-    if not any(f.wearable for f in ranked):
-        notes.append('모든 사이즈가 몸 치수보다 작습니다.')
+    if not any(f.scorable and f.wearable for f in ranked):
+        notes.append('비교 가능한 사이즈는 모두 몸 치수보다 작습니다.' if unscorable
+                     else '모든 사이즈가 몸 치수보다 작습니다.')
 
-    return Recommendation(best=ranked[0], ranked=ranked, notes=notes)
+    best = ranked[0] if ranked and ranked[0].scorable else None
+    return Recommendation(best=best, ranked=ranked, notes=notes)

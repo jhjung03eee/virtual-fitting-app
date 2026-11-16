@@ -103,6 +103,21 @@ class TestNormalizeSizes(unittest.TestCase):
         sizes, _ = normalize_sizes({'M': {'가슴단면': '55cm', '총장': '70.5'}})
         self.assertEqual(sizes['M'], {'chest': 55.0, 'length': 70.5})
 
+    def test_negative_measurement_is_excluded_with_warning(self):
+        for negative in ('-52cm', '- 52cm', '−52cm', '－52cm', -52):
+            with self.subTest(negative=negative):
+                sizes, problems = normalize_sizes({
+                    'M': {'가슴단면': negative, '총장': '70cm'},
+                })
+                self.assertEqual(sizes['M'], {'length': 70.0})
+                self.assertTrue(any('M 가슴단면 -52cm' in note and '제외' in note
+                                    for note in problems))
+
+    def test_positive_range_keeps_first_value(self):
+        sizes, problems = normalize_sizes({'M': {'가슴단면': '52~53cm'}})
+        self.assertEqual(sizes['M'], {'chest': 52.0})
+        self.assertEqual(problems, [])
+
     def test_unknown_label_dropped_with_note(self):
         sizes, problems = normalize_sizes({'M': {'가슴단면': 55, '상품코드': 'A12'}})
         self.assertEqual(sizes['M'], {'chest': 55.0})

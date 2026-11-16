@@ -211,11 +211,12 @@ def size_sort_key(size: str) -> Tuple[int, float, str]:
 
 
 def _to_float(value) -> Optional[float]:
-    """'52', '52cm', '52.5', '52~53' → float. 못 읽으면 None."""
+    """'52', '52cm', '-52cm', '52~53' → float. 못 읽으면 None."""
     if isinstance(value, (int, float)):
         return float(value)
-    match = re.search(r'\d+(?:\.\d+)?', str(value))
-    return float(match.group()) if match else None
+    text = str(value).replace('−', '-').replace('－', '-')
+    match = re.search(r'[+-]?\s*\d+(?:\.\d+)?', text)
+    return float(re.sub(r'\s+', '', match.group())) if match else None
 
 
 def check_ranges(sizes: Dict[str, Dict[str, float]]) -> List[str]:
@@ -297,8 +298,14 @@ def normalize_sizes(raw_sizes: dict) -> Tuple[Dict[str, Dict[str, float]], List[
                 problems.append(f"'{raw_label}' 항목이 무엇인지 알 수 없어 제외했습니다")
                 continue
             value = _to_float(raw_value)
-            if value is None or value <= 0:
+            if value is None or value == 0:
                 continue  # '-'로 비워둔 칸. 정상이므로 경고하지 않는다
+            if value < 0:
+                problems.append(
+                    f'{raw_size} {raw_label} {value:g}cm — 음수 치수는 사용할 수 없어 제외했습니다. '
+                    '원본 표를 확인해주세요'
+                )
+                continue
             if dimension in row and row[dimension] != value:
                 problems.append(
                     f'{raw_size}에 {dimension} 값이 두 개({row[dimension]:g}, {value:g}) 있습니다'

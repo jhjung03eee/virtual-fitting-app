@@ -44,7 +44,47 @@
     "shoulder|chest": 0.099,
     "shoulder|waist": -0.073,
     "chest|waist": 0.194
-   }
+   },
+   "parts_age": {
+    "shoulder": {
+     "a": 14.373,
+     "b_height": 0.13149,
+     "c_weight": 0.03946,
+     "d_age": -0.00563,
+     "resid_sd_cm": 1.5,
+     "test_mae_cm": 1.25,
+     "test_rmse_cm": 1.56
+    },
+    "chest": {
+     "a": 86.1138,
+     "b_height": -0.20163,
+     "c_weight": 0.5979,
+     "d_age": 0.0263,
+     "resid_sd_cm": 2.99,
+     "test_mae_cm": 2.34,
+     "test_rmse_cm": 2.98
+    },
+    "waist": {
+     "a": 97.883,
+     "b_height": -0.44873,
+     "c_weight": 0.79727,
+     "d_age": 0.17535,
+     "resid_sd_cm": 3.52,
+     "test_mae_cm": 2.61,
+     "test_rmse_cm": 3.3
+    }
+   },
+   "resid_corr_age": {
+    "shoulder|chest": 0.107,
+    "shoulder|waist": -0.083,
+    "chest|waist": 0.124
+   },
+   "age_range": [
+    20,
+    69
+   ],
+   "n_train_age": 1855,
+   "n_test_age": 464
   },
   "f": {
    "n_train": 2218,
@@ -79,7 +119,48 @@
     "shoulder|chest": 0.101,
     "shoulder|waist": 0.036,
     "chest|waist": 0.53
-   }
+   },
+   "parts_age": {
+    "shoulder": {
+     "a": 13.2803,
+     "b_height": 0.11223,
+     "c_weight": 0.06355,
+     "d_age": 0.00966,
+     "resid_sd_cm": 1.32,
+     "test_mae_cm": 1.04,
+     "test_rmse_cm": 1.33
+    },
+    "chest": {
+     "a": 96.3968,
+     "b_height": -0.37286,
+     "c_weight": 0.81112,
+     "d_age": 0.0862,
+     "resid_sd_cm": 3.29,
+     "test_mae_cm": 2.59,
+     "test_rmse_cm": 3.25
+    },
+    "waist": {
+     "a": 89.4774,
+     "b_height": -0.43525,
+     "c_weight": 0.88212,
+     "d_age": 0.14992,
+     "resid_sd_cm": 3.36,
+     "test_mae_cm": 2.58,
+     "test_rmse_cm": 3.36
+    }
+   },
+   "resid_corr_age": {
+    "shoulder|chest": 0.069,
+    "shoulder|waist": -0.029,
+    "chest|waist": 0.442
+   },
+   "age_range": [
+    20,
+    69
+   ],
+   "n_train_age": 2218,
+   "n_test_age": 555
   }
- }
+ },
+ "age_method": "나이 추가 식: 성별·부위별 선형 회귀 a + b·키(cm) + c·몸무게(kg) + d·나이(세). 사이즈코리아 8차(2020~24) 공개용 치수 데이터, 무작위 80/20 seed 42. scripts/fit_body_model_age.py"
 }

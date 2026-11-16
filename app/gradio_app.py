@@ -223,8 +223,8 @@ def sec(num, seconds=None):
     return section(num, title, hint, secs(seconds) if seconds is not None else None)
 
 
-def auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist) -> str:
-    """입력 치수가 충분하면 그대로 추천하고, 모자라면 키·몸무게 추정으로 추천한다."""
+def auto_size_advice(chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist) -> str:
+    """입력 치수가 충분하면 그대로 추천하고, 모자라면 키·몸무게(·나이) 추정으로 추천한다."""
     if not chart_file:
         return size_advice(chart_file, height, shoulder, chest, waist)
     if unknown_height not in (None, '', 0):
@@ -232,7 +232,7 @@ def auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, 
     measured = {'shoulder_cm': shoulder, 'chest_circumference_cm': chest, 'waist_circumference_cm': waist}
     mode = size_input_mode(load_chart(chart_file).category, sex, height, weight, measured)
     if mode == 'estimate':
-        return size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
+        return size_unknown_advice(chart_file, height, sex, weight, age, shoulder, chest, waist)
     if mode == 'missing':
         return ('<div class="fc-size"><p class="fc-eyebrow">Size</p>'
                 '<h3 class="fc-size__title">입력값을 확인해주세요</h3>'
@@ -240,10 +240,10 @@ def auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, 
     return size_advice(chart_file, height, shoulder, chest, waist)
 
 
-def size_only(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
+def size_only(chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist):
     """합성 없이 사이즈 추천만 바로 보여준다 (합성은 한 장에 약 50초)."""
     start = time.perf_counter()
-    advice = auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist)
+    advice = auto_size_advice(chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist)
     return advice, sec('03', time.perf_counter() - start)
 
 
@@ -289,8 +289,9 @@ def save_chart_text(text, cloth_label):
 
 # ---- 치수를 몰라요: 키·몸무게 → 예측 치수 → 사이즈별 맞을 확률 (app/size_unknown.py, PLAN.md F-37) ----
 # 위의 size_advice·_recommend 는 그대로 두고, 같은 카드 모양으로 확률 막대만 더해 그린다.
-def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist) -> str:
-    head = '<p class="fc-eyebrow">Size · 키·몸무게로 추정한 치수로 추천</p>'
+def size_unknown_advice(chart_file, height, sex, weight, age, shoulder, chest, waist) -> str:
+    with_age = age not in (None, '', 0)
+    head = f'<p class="fc-eyebrow">Size · 키·몸무게{"·나이" if with_age else ""}로 추정한 치수로 추천</p>'
 
     def fail(title, lines):
         return (f'<div class="fc-size">{head}<h3 class="fc-size__title">{html.escape(title)}</h3>'
@@ -303,7 +304,8 @@ def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
     chart = load_chart(chart_file)
     measured = {'shoulder_cm': shoulder, 'chest_circumference_cm': chest, 'waist_circumference_cm': waist}
     try:
-        u = recommend_unknown(chart, sex, float(height), float(weight), measured=measured)
+        u = recommend_unknown(chart, sex, float(height), float(weight), measured=measured,
+                              age=float(age) if with_age else None)
     except ValueError as e:
         return fail('입력값을 확인해주세요', [str(e)])
     rec = u.recommendation
@@ -335,11 +337,14 @@ def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
             f'{html.escape(d.label)}</span></td>' for d in by_size[size].dimensions)
         pick = ' class="is-pick"' if size == best.size else ''
         rows.append(f'<tr{pick}><td class="fc-size__name">{html.escape(size)}</td>{cells}</tr>')
-    notes = [f'입력: {sex} · 키 {float(height):g}cm · 몸무게 {float(weight):g}kg',
-             f'키·몸무게로 예측한 치수: {" · ".join(u.prediction.sources)} (사이즈코리아 8차 회귀, Bartol 외 2022 방식)',
+    notes = [f'입력: {sex} · 키 {float(height):g}cm · 몸무게 {float(weight):g}kg'
+             + (f' · 나이 {float(age):g}세' if with_age else ' · 나이 미입력'),
+             f'예측한 치수: {" · ".join(u.prediction.sources)} (사이즈코리아 8차 회귀, Bartol 외 2022 방식)',
              f'예측 오차만큼 흔든 몸 {u.samples}개로 사이즈마다 맞을 확률을 계산해, 가장 큰 {best.size}를 추천합니다.']
     if u.point_best and u.point_best != best.size:
         notes.append(f'예측값 한 점으로만 보면 {u.point_best} 입니다.')
+    if not with_age and chart.category == 'lower':
+        notes.append('나이를 넣으면 허리 예측이 더 정확해져요 (사이즈코리아 검증에서 허리 오차 약 17% 감소).')
     if probs[best.size] < CONFIDENT:
         notes.append(f'확률이 {CONFIDENT * 100:.0f}% 미만이라 사이즈 경계에 있어요. '
                      '줄자로 가슴둘레(하의는 허리둘레)만 재서 위 칸에 넣으면 더 정확해집니다.')
@@ -360,12 +365,12 @@ def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
     )
 
 
-def size_unknown_only(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
-    """치수를 몰라요 버튼: 키·몸무게로 추천 (합성 없음). 상자 안 키가 비어 있으면 위 '내 치수'의 키를 쓴다."""
+def size_unknown_only(chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist):
+    """치수를 몰라요 버튼: 키·몸무게(·나이)로 추천 (합성 없음). 상자 안 키가 비어 있으면 위 '내 치수'의 키를 쓴다."""
     start = time.perf_counter()
     if unknown_height not in (None, '', 0):
         height = unknown_height
-    advice = size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
+    advice = size_unknown_advice(chart_file, height, sex, weight, age, shoulder, chest, waist)
     return advice, sec('03', time.perf_counter() - start)
 
 
@@ -463,7 +468,7 @@ def postprocess(person, result, cloth_type):
 
 
 def run(person, garment, cloth_label, garment_photo_label,
-        chart_file, height, sex, unknown_height, weight, shoulder, chest, waist, progress=gr.Progress()):
+        chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist, progress=gr.Progress()):
     """합성 → 후처리 → 사이즈 추천. 설정은 엔진 기본값으로 고정한다(스텝 25 · guidance 2.5 · 시드 42).
 
     고급 설정(스텝·시드·후보 장수·후처리 끄기·사진 검사 무시)과 후처리 전후 비교는 2026-11-02에 뺐다.
@@ -477,7 +482,7 @@ def run(person, garment, cloth_label, garment_photo_label,
         raise gr.Error(check.message() + '\n사진 검사 안내대로 다시 찍어 올려 주세요.')
 
     start = time.perf_counter()
-    advice = auto_size_advice(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist)
+    advice = auto_size_advice(chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist)
     size_header = sec('03', time.perf_counter() - start)
 
     cloth_type = CLOTH_LABELS[cloth_label]
@@ -499,23 +504,25 @@ def run(person, garment, cloth_label, garment_photo_label,
     return restored, advice, info, size_header, sec('04', time.perf_counter() - start)
 
 
-def recommended_size(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
-    """사이즈 카드와 같은 규칙으로 추천 사이즈 하나. 못 고르면 None."""
+def recommended_size(chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist):
+    """사이즈 카드(auto_size_advice)와 같은 규칙으로 추천 사이즈 하나. 못 고르면 None."""
     if not chart_file:
         return None
     chart = load_chart(chart_file)
+    est_height = unknown_height if unknown_height not in (None, '', 0) else height   # auto_size_advice 와 같게
     measured = {'shoulder_cm': shoulder, 'chest_circumference_cm': chest, 'waist_circumference_cm': waist}
-    mode = size_input_mode(chart.category, sex, unknown_height, weight, measured)
+    mode = size_input_mode(chart.category, sex, est_height, weight, measured)
     if mode == 'estimate':
         try:
-            return recommend_unknown(chart, sex, float(unknown_height), float(weight), measured=measured).recommendation.best.size
+            return recommend_unknown(chart, sex, float(est_height), float(weight), measured=measured,
+                                     age=float(age) if age not in (None, '', 0) else None).recommendation.best.size
         except (ValueError, AttributeError):
             return None
     _chart, rec, error = _recommend(chart_file, height, shoulder, chest, waist)
     return None if error else rec.best.size
 
 
-def size_preview(result, cloth_label, chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
+def size_preview(result, cloth_label, chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist):
     """사이즈별 예상 착용 모습 (F-39): 합성 결과를 추천 사이즈로 보고, 다른 사이즈는 총장 비율만큼 몸판 기장만 바꾼다."""
     def fail(text):
         return [], _note('warn', [text])
@@ -527,7 +534,7 @@ def size_preview(result, cloth_label, chart_file, height, sex, unknown_height, w
     if not chart_file:
         return fail('치수표를 골라 주세요.')
     chart = load_chart(chart_file)
-    base = recommended_size(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist)
+    base = recommended_size(chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist)
     if base is None:
         return fail('추천 사이즈를 정하지 못했어요. 치수 또는 성별·키·몸무게를 넣어 주세요.')
     try:
@@ -607,6 +614,9 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                                                   elem_classes='fc-unknown__field')
                     weight_in = gr.Number(value=None, label='몸무게 (kg)', placeholder='예: 68',
                                           elem_classes='fc-unknown__field')
+                    # F-40: 선택 입력. 넣으면 나이를 더한 식으로 추정(허리 오차 3.2 → 2.6cm), 비우면 키·몸무게 식
+                    age_in = gr.Number(value=None, label='나이 (선택)', placeholder='예: 24',
+                                       elem_classes='fc-unknown__field')
                 unknown_btn = gr.Button('키·몸무게로 내 사이즈 찾기', variant='primary', size='lg',
                                         elem_classes='fc-unknown__btn')
 
@@ -639,12 +649,12 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
     run_btn.click(
         fn=run,
         inputs=[person_in, garment_in, cloth_in, garment_photo_in,
-                chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
+                chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in, shoulder_in, chest_in, waist_in],
         outputs=[result_out, size_out, info_out, sec3_out, sec4_out],
     )
     size_btn.click(
         fn=size_only,
-        inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
+        inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in, shoulder_in, chest_in, waist_in],
         outputs=[size_out, sec3_out],
     )
     # 치수표 사진은 올리는 순간 읽는다. 잘못 읽은 숫자는 JSON 칸에서 고쳐 다시 저장한다
@@ -654,13 +664,13 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                          outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out])
     preview_btn.click(
         fn=size_preview,
-        inputs=[result_out, cloth_in, chart_in, height_in, sex_in, unknown_height_in, weight_in,
+        inputs=[result_out, cloth_in, chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in,
                 shoulder_in, chest_in, waist_in],
         outputs=[preview_out, preview_status_out],
     )
     unknown_btn.click(
         fn=size_unknown_only,
-        inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
+        inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in, shoulder_in, chest_in, waist_in],
         outputs=[size_out, sec3_out],
     )
 

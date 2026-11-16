@@ -5,7 +5,10 @@
 
 1) 예측 (Bartol 외, "Linear regression vs. deep learning: a simple yet effective baseline for human body
    measurement", Sensors 2022 의 방식): 성별마다, 부위마다 최소제곱 선형 회귀
-       치수 = a + b·키(cm) + c·몸무게(kg)
+       치수 = a + b·키(cm) + c·몸무게(kg)            (나이를 비우면)
+       치수 = a + b·키 + c·몸무게 + d·나이(세)        (나이를 넣으면, F-40 `scripts/fit_body_model_age.py`)
+   나이는 선택 입력이다. 입력 조합 255개·곡선·신경망 비교에서 나이만 허리 오차를 17% 줄이고
+   하의 사이즈 일치율을 3~6%p 올렸다(상의는 같음).
    계수는 사이즈코리아 8차(2020) 직접측정 원자료로 학습했다 (`scripts/fit_body_model.py`,
    결과 `data/body_models/sizekorea8_2020.json`). 부위 정의는 앱 안내와 같다:
    어깨 = No.088 어깨사이너비(양쪽 어깨점 사이 수평거리), 가슴 = No.042 젖가슴둘레, 허리 = No.045 허리둘레.
@@ -86,8 +89,12 @@ LABEL = {'shoulder_cm': '어깨너비', 'chest_circumference_cm': '가슴둘레'
 
 
 def predict(category: str, sex: str, height_cm: float, weight_kg: float,
-            measured: Optional[Dict[str, float]] = None, model: Optional[dict] = None) -> Prediction:
-    """키·몸무게로 몸 치수를 예측한다. measured 에 줄자로 잰 값이 있으면 그 항목은 예측하지 않는다."""
+            measured: Optional[Dict[str, float]] = None, model: Optional[dict] = None,
+            age: Optional[float] = None) -> Prediction:
+    """키·몸무게(·나이)로 몸 치수를 예측한다. measured 에 줄자로 잰 값이 있으면 그 항목은 예측하지 않는다.
+
+    age 를 주면 나이를 더한 식(`parts_age`, F-40)을 쓴다. 비우면 키·몸무게 식(`parts`) 그대로.
+    """
     model = model or load_model()
     sx = SEX.get(str(sex).strip().lower())
     if sx is None:
@@ -100,6 +107,12 @@ def predict(category: str, sex: str, height_cm: float, weight_kg: float,
         raise ValueError(f'키·몸무게 추천은 상의·하의만 됩니다 ({category}).')
     m = model['sex'][sx]
     h, w = float(height_cm), float(weight_kg)
+    use_age = age not in (None, '', 0) and 'parts_age' in m
+    if use_age:
+        lo, hi = m.get('age_range', (20, 69))
+        if not (lo <= float(age) <= hi):
+            raise ValueError(f'나이는 {lo}~{hi}세만 반영할 수 있어요 (사이즈코리아 측정 범위). 비우면 키·몸무게로만 추정합니다.')
+        age = float(age)
     measured = {k: v for k, v in (measured or {}).items() if v not in (None, '', 0)}
     profile, sd, part_of, sources = {'height_cm': h}, {}, {}, []
     for fld, part in PREDICT[category].items():
@@ -107,17 +120,20 @@ def predict(category: str, sex: str, height_cm: float, weight_kg: float,
             profile[fld] = float(measured[fld])
             sources.append(f'{LABEL[fld]} 줄자 {profile[fld]:g}cm')
             continue
-        c = m['parts'][part]
-        profile[fld] = round(c['a'] + c['b_height'] * h + c['c_weight'] * w, 1)
+        c = m['parts_age' if use_age else 'parts'][part]
+        value = c['a'] + c['b_height'] * h + c['c_weight'] * w + (c['d_age'] * age if use_age else 0.0)
+        profile[fld] = round(value, 1)
         sd[fld] = c['resid_sd_cm']
         part_of[part] = fld
         sources.append(f'{LABEL[fld]} {profile[fld]:g}cm 예측(평균 오차 {c["test_mae_cm"]:g}cm)')
     corr = {}
-    for key, r in m.get('resid_corr', {}).items():
+    for key, r in m.get('resid_corr_age' if use_age else 'resid_corr', {}).items():
         a, b = key.split('|')
         if a in part_of and b in part_of:
             corr[f'{part_of[a]}|{part_of[b]}'] = r
-    seed = round(h * 10) * 100003 + round(w * 10) * 31 + (7 if sx == 'm' else 13)
+    seed = round(h * 10) * 100003 + round(w * 10) * 31 + (7 if sx == 'm' else 13) + (round(age) * 1009 if use_age else 0)
+    if use_age:
+        sources.append(f'나이 {age:g}세 반영')
     return Prediction(profile, sd, corr, sources, seed)
 
 
@@ -182,9 +198,9 @@ def size_input_mode(category: str, sex, height_cm, weight_kg, measured: Dict[str
 
 def recommend_unknown(chart: SizeChart, sex: str, height_cm: float, weight_kg: float,
                       measured: Optional[Dict[str, float]] = None, samples: int = DEFAULT_SAMPLES,
-                      model: Optional[dict] = None) -> UnknownRecommendation:
+                      model: Optional[dict] = None, age: Optional[float] = None) -> UnknownRecommendation:
     """치수를 모를 때의 추천. 결과의 recommendation 은 size_fit.Recommendation 이라 기존 화면 코드로 그릴 수 있다."""
-    pred = predict(chart.category, sex, height_cm, weight_kg, measured, model)
+    pred = predict(chart.category, sex, height_cm, weight_kg, measured, model, age=age)
     point = recommend(chart, to_chart_body(pred.profile))
     probs = size_probabilities(chart, pred, samples)
     point_best = point.best.size if point.best else None

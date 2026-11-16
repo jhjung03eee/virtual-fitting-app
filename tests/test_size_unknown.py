@@ -65,6 +65,37 @@ class TestSizeUnknown(unittest.TestCase):
             self.assertEqual(r.recommendation.best.size, plain.best.size)
             self.assertEqual(r.probabilities[plain.best.size], 1.0)
 
+    def test_age_model_in_file(self):
+        """F-40: 나이 식은 기존 키·몸무게 식 옆에 덧붙인다(기존 식은 그대로)."""
+        m = su.load_model()
+        for sx in ('m', 'f'):
+            self.assertEqual(set(m['sex'][sx]['parts_age']), {'shoulder', 'chest', 'waist'})
+            self.assertIn('d_age', m['sex'][sx]['parts_age']['waist'])
+            lo, hi = m['sex'][sx]['age_range']
+            self.assertTrue(lo <= 25 <= hi)
+
+    def test_age_is_optional_and_older_means_larger_waist(self):
+        base = su.predict('lower', '남', 175, 70)
+        self.assertEqual(base.profile, su.predict('lower', '남', 175, 70, age=None).profile)   # 비우면 기존 식
+        young = su.predict('lower', '남', 175, 70, age=25)
+        old = su.predict('lower', '남', 175, 70, age=55)
+        self.assertGreater(old.profile['waist_circumference_cm'], young.profile['waist_circumference_cm'] + 3)
+        self.assertTrue(any('나이' in s for s in young.sources))
+        self.assertFalse(any('나이' in s for s in base.sources))
+
+    def test_age_changes_recommendation_reproducibly(self):
+        chart = next(c for c in charts() if c.category == 'lower')
+        a = su.recommend_unknown(chart, '여', 162, 58, samples=300, age=60)
+        b = su.recommend_unknown(chart, '여', 162, 58, samples=300, age=60)
+        self.assertEqual(a.probabilities, b.probabilities)
+        self.assertAlmostEqual(sum(a.probabilities.values()), 1.0, places=9)
+
+    def test_age_out_of_range(self):
+        with self.assertRaises(ValueError):
+            su.predict('upper', '남', 175, 70, age=12)
+        with self.assertRaises(ValueError):
+            su.predict('upper', '남', 175, 70, age=90)
+
     def test_bad_inputs(self):
         with self.assertRaises(ValueError):
             su.predict('upper', '', 175, 70)

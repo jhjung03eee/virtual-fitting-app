@@ -468,7 +468,7 @@ def postprocess(person, result, cloth_type):
 
 
 def run(person, garment, cloth_label, garment_photo_label,
-        chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist, progress=gr.Progress()):
+        chart_file, height, sex, unknown_height, weight, age, shoulder, chest, waist):
     """합성 → 후처리 → 사이즈 추천. 설정은 엔진 기본값으로 고정한다(스텝 25 · guidance 2.5 · 시드 42).
 
     고급 설정(스텝·시드·후보 장수·후처리 끄기·사진 검사 무시)과 후처리 전후 비교는 2026-11-02에 뺐다.
@@ -486,7 +486,6 @@ def run(person, garment, cloth_label, garment_photo_label,
     size_header = sec('03', time.perf_counter() - start)
 
     cloth_type = CLOTH_LABELS[cloth_label]
-    progress(0.0, desc='합성 중 (약 50초)')
     start = time.perf_counter()
     result, timing = try_on(
         person=person,
@@ -498,7 +497,6 @@ def run(person, garment, cloth_label, garment_photo_label,
         seed=DEFAULT_SEED,
         return_timing=True,
     )
-    progress(0.95, desc='얼굴·배경 되돌리는 중')
     restored, note = postprocess(person, result, cloth_type)
     info = f"합성 {secs(timing['total_s'])} · {note}"
     return restored, advice, info, size_header, sec('04', time.perf_counter() - start)
@@ -637,41 +635,44 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
 
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
+    # 기다리는 동안 출력 칸마다 Gradio 진행률(몇 초·몇 %)이 겹쳐 떠서 모두 끈다
+    quiet = dict(show_progress='hidden')
+
     # 사진을 올리는 순간 검사한다 (합성 한 장에 2분이라 미리 걸러야 한다)
     person_in.change(fn=photo_status, inputs=[person_in],
-                     outputs=[photo_status_out, photo_guide_out, sec1_out])
+                     outputs=[photo_status_out, photo_guide_out, sec1_out], **quiet)
     # 옷 사진도 올리는 순간 검사한다. 사진 종류(상품/착용)에 따라 기준이 달라 둘 다 연결한다
     garment_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in],
-                      outputs=[garment_status_out, sec2_out])
+                      outputs=[garment_status_out, sec2_out], **quiet)
     garment_photo_in.change(fn=garment_status, inputs=[garment_in, garment_photo_in],
-                            outputs=[garment_status_out, sec2_out])
+                            outputs=[garment_status_out, sec2_out], **quiet)
 
     run_btn.click(
         fn=run,
         inputs=[person_in, garment_in, cloth_in, garment_photo_in,
                 chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in, shoulder_in, chest_in, waist_in],
-        outputs=[result_out, size_out, info_out, sec3_out, sec4_out],
+        outputs=[result_out, size_out, info_out, sec3_out, sec4_out], **quiet,
     )
     size_btn.click(
         fn=size_only,
         inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in, shoulder_in, chest_in, waist_in],
-        outputs=[size_out, sec3_out],
+        outputs=[size_out, sec3_out], **quiet,
     )
     # 치수표 사진은 올리는 순간 읽는다. 잘못 읽은 숫자는 JSON 칸에서 고쳐 다시 저장한다
     chart_photo_in.upload(fn=read_chart_photo, inputs=[chart_photo_in, cloth_in],
-                          outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out])
+                          outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out], **quiet)
     chart_save_btn.click(fn=save_chart_text, inputs=[chart_json_in, cloth_in],
-                         outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out])
+                         outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out], **quiet)
     preview_btn.click(
         fn=size_preview,
         inputs=[result_out, cloth_in, chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in,
                 shoulder_in, chest_in, waist_in],
-        outputs=[preview_out, preview_status_out],
+        outputs=[preview_out, preview_status_out], **quiet,
     )
     unknown_btn.click(
         fn=size_unknown_only,
         inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, age_in, shoulder_in, chest_in, waist_in],
-        outputs=[size_out, sec3_out],
+        outputs=[size_out, sec3_out], **quiet,
     )
 
 

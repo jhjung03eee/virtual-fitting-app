@@ -69,6 +69,20 @@ class TestSizeWarp(unittest.TestCase):
         self.assertTrue(new_mask[SHOULDER + 30, RIGHT + 8])                 # 옷은 팔 자리까지 넓어졌지만
         np.testing.assert_array_equal(np.asarray(out)[SHOULDER + 30, RIGHT + 8], (200, 150, 120))  # 팔이 위
 
+    def test_hem_band_moves_shadow_under_new_hem(self):
+        """hem_band: 원래 밑단 아래 그림자가 새 밑단 아래로 따라온다 (F-39). 없으면 새 밑단 아래는 원래 배경 그대로."""
+        image, mask = tee()
+        rgb = np.asarray(image).copy()
+        rgb[HEM:HEM + 4, LEFT:RIGHT] = (90, 90, 90)          # 밑단 아래 그림자
+        image = Image.fromarray(rgb)
+        new_hem = SHOULDER + int((HEM - SHOULDER) * 1.25)
+        plain, _ = warp_garment(image, mask, SHOULDER, 80, scale_x=1.0, scale_y=1.25)
+        moved, _ = warp_garment(image, mask, SHOULDER, 80, scale_x=1.0, scale_y=1.25, hem_band=10)
+        self.assertGreater(int(np.asarray(plain)[new_hem + 2, 80, 0]), 200)
+        self.assertLess(int(np.asarray(moved)[new_hem + 2, 80, 0]), 150)
+        # band 아래는 원래 그림 그대로
+        np.testing.assert_array_equal(np.asarray(moved)[new_hem + 20, 80], rgb[new_hem + 20, 80])
+
     def test_scales_for_size(self):
         sx, sy = scales_for_size({'chest': 0.7, 'length': 1.0}, {'chest': 0.63, 'length': 1.1})
         self.assertAlmostEqual(sx, 0.9)

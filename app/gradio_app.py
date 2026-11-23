@@ -53,6 +53,7 @@ from photo_check import check_photo, run_pose
 from photo_guide import draw_guide
 from restore_original import restore_original
 from size_fit import SizeChart, ko, recommend
+from size_preview import PreviewError, make_previews
 from size_unknown import CONFIDENT, recommend_unknown, size_input_mode
 from ui_style import HEADER_HTML, STYLE, section
 
@@ -498,6 +499,46 @@ def run(person, garment, cloth_label, garment_photo_label,
     return restored, advice, info, size_header, sec('04', time.perf_counter() - start)
 
 
+def recommended_size(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
+    """사이즈 카드와 같은 규칙으로 추천 사이즈 하나. 못 고르면 None."""
+    if not chart_file:
+        return None
+    chart = load_chart(chart_file)
+    measured = {'shoulder_cm': shoulder, 'chest_circumference_cm': chest, 'waist_circumference_cm': waist}
+    mode = size_input_mode(chart.category, sex, unknown_height, weight, measured)
+    if mode == 'estimate':
+        try:
+            return recommend_unknown(chart, sex, float(unknown_height), float(weight), measured=measured).recommendation.best.size
+        except (ValueError, AttributeError):
+            return None
+    _chart, rec, error = _recommend(chart_file, height, shoulder, chest, waist)
+    return None if error else rec.best.size
+
+
+def size_preview(result, cloth_label, chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
+    """사이즈별 예상 착용 모습 (F-39): 합성 결과를 추천 사이즈로 보고, 다른 사이즈는 총장 비율만큼 몸판 기장만 바꾼다."""
+    def fail(text):
+        return [], _note('warn', [text])
+
+    if result is None:
+        return fail('먼저 「피팅 해보기」로 합성 결과를 만들어 주세요.')
+    if CLOTH_LABELS[cloth_label] != 'upper':
+        return fail('사이즈별 예상 착용 모습은 상의만 지원해요.')
+    if not chart_file:
+        return fail('치수표를 골라 주세요.')
+    chart = load_chart(chart_file)
+    base = recommended_size(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist)
+    if base is None:
+        return fail('추천 사이즈를 정하지 못했어요. 치수 또는 성별·키·몸무게를 넣어 주세요.')
+    try:
+        pictures = make_previews(result, chart.sizes, base)
+    except PreviewError as e:
+        return fail(str(e))
+    return pictures, _note('ok', [
+        f'합성 결과를 추천 사이즈 **{base}** 로 보고, 다른 사이즈는 치수표 총장 차이만큼 기장만 바꿨어요.',
+        '어깨선·소매·몸판 폭·핏은 바뀌지 않아요. 참고용 미리보기예요.'])
+
+
 # gradio 6부터 theme·css·head 는 Blocks() 가 아니라 launch() 인자다 (Colab은 최신을 설치한다)
 GRADIO6 = int(gr.__version__.split('.')[0]) >= 6
 
@@ -578,6 +619,11 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
             result_out = gr.Image(label='피팅 결과', show_label=False, type='pil', height=640, interactive=False)
             info_out = gr.Markdown(elem_classes='fc-info')
             size_out = gr.HTML(size_advice(None, None, None, None, None), padding=False)
+            # F-39: 합성과 별도 버튼. 누를 때만 만든다 (상의, 총장만)
+            preview_btn = gr.Button('사이즈별 예상 착용 모습 보기', variant='secondary', size='lg')
+            preview_status_out = gr.HTML('', padding=False)
+            preview_out = gr.Gallery(label='사이즈별 예상 착용 모습 · 총장만 반영', columns=3, height=420,
+                                     object_fit='contain', interactive=False)
 
     # 옷 종류를 바꾸면 그에 맞는 치수표만 남긴다
     cloth_in.change(fn=charts_for_cloth, inputs=[cloth_in], outputs=[chart_in])
@@ -606,6 +652,12 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
                           outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out])
     chart_save_btn.click(fn=save_chart_text, inputs=[chart_json_in, cloth_in],
                          outputs=[chart_status_out, chart_in, chart_json_in, chart_file_out])
+    preview_btn.click(
+        fn=size_preview,
+        inputs=[result_out, cloth_in, chart_in, height_in, sex_in, unknown_height_in, weight_in,
+                shoulder_in, chest_in, waist_in],
+        outputs=[preview_out, preview_status_out],
+    )
     unknown_btn.click(
         fn=size_unknown_only,
         inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],

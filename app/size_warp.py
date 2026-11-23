@@ -14,13 +14,28 @@ import numpy as np
 from PIL import Image
 
 
-def warp_garment(image, mask, top_y, center_x, scale_x, scale_y, keep=None, ramp=None, feather=None):
+def _below_hem_alpha(new_mask, top_y, band):
+    """새 밑단 바로 아래 band 줄의 섞는 비율: 밑단에서 1, band 아래에서 0 (열마다 밑단 높이가 다르다)."""
+    h, w = new_mask.shape
+    below = new_mask.copy()
+    below[:int(top_y) + 1] = False
+    has = below.any(axis=0)
+    hem = np.where(has, h - 1 - np.argmax(below[::-1], axis=0), -1)
+    dy = np.arange(h)[:, None] - hem[None, :]
+    alpha = np.clip(1.0 - dy / float(band), 0.0, 1.0) * (dy > 0) * has[None, :]
+    return alpha.astype(np.float32)
+
+
+def warp_garment(image, mask, top_y, center_x, scale_x, scale_y, keep=None, ramp=None, feather=None, hem_band=0):
     """image: PIL, mask: bool HxW(옷 영역), top_y: 이 줄(겨드랑이) 아래만 바꾼다, center_x: 몸 가운데 x(픽셀).
 
     scale_y: top_y 아래 몸판 길이 배율. scale_x: 몸판 폭 배율.
     keep: bool HxW — 결과 맨 위에 원래 픽셀을 다시 얹을 자리(팔·손). 없으면 생략.
     ramp: 가로 배율이 1에서 scale_x 까지 바뀌는 top_y 아래 구간(픽셀). 기본은 높이의 2%.
     feather: 옷 경계를 섞는 폭(픽셀). 기본은 높이의 0.3%.
+    hem_band: 0보다 크면 새 밑단 아래 이 줄 수만큼 **변환한 그림을 이어 쓰고** 아래로 갈수록 원래 그림으로 섞는다.
+      밑단 경계에서 늘린 옷과 원래 바지를 바로 섞으면 뿌연 띠가 생기고 원래 밑단 아래 그림자가 사라져
+      칼로 자른 듯 보였다(F-39). 변환한 그림의 밑단 아래는 원래 밑단 아래(그림자 포함)를 옮겨 온 것이다.
     반환: (PIL 이미지, 새 옷 영역 bool HxW)
     """
     import cv2
@@ -53,10 +68,29 @@ def warp_garment(image, mask, top_y, center_x, scale_x, scale_y, keep=None, ramp
                              (cv2.resize(grown, small, interpolation=cv2.INTER_AREA) > 0).astype(np.uint8) * 255,
                              3, cv2.INPAINT_TELEA)
         filled = cv2.resize(filled, (w, h), interpolation=cv2.INTER_LINEAR)
-        # 바꾸는 건 새 옷 밖의 드러난 자리만. 새 옷 경계의 바탕까지 바꾸면 메운 색이 테두리로 비친다
-        reveal = (grown > 0) & ~new_mask
+        # 바꾸는 건 새 옷 밖의 드러난 자리만. 새 옷 경계의 바탕까지 바꾸면 메운 색이 테두리로 비친다.
+        # 옷 테두리 전체(grown)를 바꾸면 변하지 않은 어깨·소매 테두리까지 흐린 메움 색으로 덮여 흰 줄·점이 생겼다(F-39)
+        # → 실제로 옷이 비켜난 자리(mask & ~new_mask) 근처, top_y 아래만 바꾼다
+        moved = cv2.dilate((mask & ~new_mask).astype(np.uint8) * 255, np.ones((k, k), np.uint8)) > 0
+        reveal = (grown > 0) & ~new_mask & moved & (ys > top_y)
         base[reveal] = filled[reveal]
-    alpha = cv2.GaussianBlur(new_mask.astype(np.float32), (0, 0), feather)[..., None]
+    alpha = cv2.GaussianBlur(new_mask.astype(np.float32), (0, 0), feather)
+    if hem_band > 0:
+        alpha = np.maximum(alpha, _below_hem_alpha(new_mask, top_y, hem_band))
+        # 옷 옆 몇 픽셀도 변환한 그림을 쓴다. 옷 자리만 바꾸면 늘어난 옷 옆에 원래 바지 허리 모서리가 그대로 남아
+        # 옆선이 원래 밑단 높이에서 꺾이고 바지와 엉겨 보였다(F-39, 사용자 "경계 양쪽 끝이 이상하다").
+        # 변환한 그림에서는 옷 옆선·벽·바지 모서리가 원래 관계 그대로 함께 내려온다.
+        side = max(2, int(hem_band // 2))
+        wide = cv2.dilate(alpha, np.ones((1, 2 * side + 1), np.uint8))
+        wide = cv2.GaussianBlur(wide, (0, 0), sigmaX=side / 2.0, sigmaY=0.5)
+        if keep is not None:
+            # 팔은 맨 위에 원래대로 다시 얹지만, 변환한 그림 속 팔이 원래 팔 밖으로 비치면 팔이 둘로 보인다 → 그 자리는 뺀다
+            moved_arm = cv2.remap(keep.astype(np.uint8) * 255, src_x, src_y, cv2.INTER_LINEAR,
+                                  borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+            moved_arm = cv2.dilate(moved_arm, np.ones((5, 5), np.uint8)) > 0
+            wide[moved_arm] = alpha[moved_arm]
+        alpha = np.where(ys > top_y, np.maximum(alpha, wide), alpha)
+    alpha = alpha[..., None]
     out = warped * alpha + base * (1.0 - alpha)
     if keep is not None:
         a = cv2.GaussianBlur((keep & (ys > top_y)).astype(np.float32), (0, 0), feather)[..., None]

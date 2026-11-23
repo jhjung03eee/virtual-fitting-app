@@ -51,6 +51,7 @@ from photo_check import check_photo, run_pose
 from photo_guide import draw_guide
 from restore_original import restore_original
 from size_fit import SizeChart, ko, recommend
+from size_unknown import CONFIDENT, recommend_unknown
 from ui_style import HEADER_HTML, STYLE, section
 
 # 이너·아우터는 FASHN에서 상의와 같은 처리라(fashn_core.CATEGORY_BY_CLOTH_TYPE) 화면에서는 뺐다
@@ -226,6 +227,118 @@ def size_only(chart_file, height, shoulder, chest, waist):
     return advice, sec('03', time.perf_counter() - start)
 
 
+# ---- 치수를 몰라요: 키·몸무게 → 예측 치수 → 사이즈별 맞을 확률 (app/size_unknown.py, PLAN.md F-37) ----
+# 위의 size_advice·_recommend 는 그대로 두고, 같은 카드 모양으로 확률 막대만 더해 그린다.
+def size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist) -> str:
+    head = '<p class="fc-eyebrow">Size · 치수를 몰라요</p>'
+
+    def fail(title, lines):
+        return (f'<div class="fc-size">{head}<h3 class="fc-size__title">{html.escape(title)}</h3>'
+                + ''.join(f'<p class="fc-size__msg">{html.escape(line)}</p>' for line in lines) + '</div>')
+
+    if not chart_file:
+        return fail('사이즈 추천 불가', ['치수표가 없어 사이즈 추천을 건너뜁니다.'])
+    if height in (None, '', 0) or weight in (None, '', 0) or not sex:
+        return fail('입력값을 확인해주세요', ['성별 · 키 · 몸무게를 모두 넣어 주세요.'])
+    chart = load_chart(chart_file)
+    measured = {'shoulder_cm': shoulder, 'chest_circumference_cm': chest, 'waist_circumference_cm': waist}
+    try:
+        u = recommend_unknown(chart, sex, float(height), float(weight), measured=measured)
+    except ValueError as e:
+        return fail('입력값을 확인해주세요', [str(e)])
+    rec = u.recommendation
+    if rec.best is None:
+        return fail('사이즈 추천 불가', [' '.join(rec.notes)])
+
+    best, probs = rec.best, u.probabilities
+    by_size = {fit.size: fit for fit in rec.ranked}
+    labels = {d.dimension: d.label for d in best.dimensions}
+    verdict = f"{labels.get('chest') or labels.get('waist') or '레귤러'} 핏" if best.wearable else '모든 사이즈가 몸보다 작아요'
+    chips = ''.join(
+        f'<span class="fc-chip{" is-pick" if size == best.size else ""}'
+        f'{"" if by_size[size].wearable else " is-no"}">{html.escape(size)} {probs[size] * 100:.0f}%</span>'
+        for size in chart.sizes)
+    bars = ''.join(
+        '<div style="display:grid;grid-template-columns:52px 1fr 56px;gap:10px;align-items:center;font-size:17px;'
+        f'{"font-weight:700" if size == best.size else "opacity:.75"}">'
+        f'<span>{html.escape(size)}</span>'
+        '<span style="height:14px;border-radius:7px;overflow:hidden;background:rgba(127,127,127,.22);display:block">'
+        f'<span style="display:block;height:100%;width:{probs[size] * 100:.0f}%;background:{"#1463F3" if size == best.size else "currentColor"}"></span></span>'
+        f'<span>{probs[size] * 100:.0f}%</span></div>'
+        for size in chart.sizes)
+    dims = [d.dimension for d in best.dimensions]
+    header = ''.join(f'<th>{ko(d)}</th>' for d in dims)
+    rows = []
+    for size in chart.sizes:
+        cells = ''.join(
+            f'<td>{d.ease_cm:+.1f}<span class="fc-tone tone-{FIT_TONE.get(d.label, "mute")}">'
+            f'{html.escape(d.label)}</span></td>' for d in by_size[size].dimensions)
+        pick = ' class="is-pick"' if size == best.size else ''
+        rows.append(f'<tr{pick}><td class="fc-size__name">{html.escape(size)}</td>{cells}</tr>')
+    notes = [f'키·몸무게로 예측한 치수: {" · ".join(u.prediction.sources)} (사이즈코리아 8차 회귀, Bartol 외 2022 방식)',
+             f'예측 오차만큼 흔든 몸 {u.samples}개로 사이즈마다 맞을 확률을 계산해, 가장 큰 {best.size}를 추천합니다.']
+    if u.point_best and u.point_best != best.size:
+        notes.append(f'예측값 한 점으로만 보면 {u.point_best} 입니다.')
+    if probs[best.size] < CONFIDENT:
+        notes.append(f'확률이 {CONFIDENT * 100:.0f}% 미만이라 사이즈 경계에 있어요. '
+                     '줄자로 가슴둘레(하의는 허리둘레)만 재서 위 칸에 넣으면 더 정확해집니다.')
+    notes += rec.notes
+    return (
+        f'<div class="fc-size fc-unknown-card">{head}'
+        f'<div class="fc-size__head"><span class="fc-size__big">{html.escape(best.size)}</span>'
+        f'<span class="fc-size__verdict{"" if best.wearable else " is-no"}">{verdict}</span></div>'
+        f'<p class="fc-unknown-prob">맞을 확률 {probs[best.size] * 100:.0f}%'
+        f'{"" if probs[best.size] >= CONFIDENT else " · 경계에 있어요"}</p>'
+        f'<p class="fc-size__src">{html.escape(chart.name)} · 레귤러핏 옷 기준 · 예측 치수 기준</p>'
+        f'<div class="fc-chips">{chips}</div>'
+        f'<div class="fc-unknown-bars" style="display:grid;gap:8px;margin:8px 0 14px">{bars}</div>'
+        f'<table class="fc-table"><thead><tr><th>사이즈</th>{header}</tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table>'
+        '<p class="fc-size__legend">표의 숫자 = 옷 단면 − 예측한 몸 단면 (cm). + 는 여유, − 는 옷이 작음</p>'
+        '<ul class="fc-size__notes">' + ''.join(f'<li>{html.escape(n)}</li>' for n in notes) + '</ul></div>'
+    )
+
+
+def size_unknown_only(chart_file, height, sex, unknown_height, weight, shoulder, chest, waist):
+    """치수를 몰라요 버튼: 키·몸무게로 추천 (합성 없음). 상자 안 키가 비어 있으면 위 '내 치수'의 키를 쓴다."""
+    start = time.perf_counter()
+    if unknown_height not in (None, '', 0):
+        height = unknown_height
+    advice = size_unknown_advice(chart_file, height, sex, weight, shoulder, chest, waist)
+    return advice, sec('03', time.perf_counter() - start)
+
+
+# "치수를 몰라요" 상자의 제목·안내 + 이 상자 전용 스타일 (큰 글씨·강조 테두리·큰 버튼).
+UNKNOWN_HEAD_HTML = """
+<style>
+:root, .dark { --fc-unknown: #1463F3; }
+.fc-unknown > *, .fc-unknown .styler { border: none !important; box-shadow: none !important; background: transparent !important; }
+.fc-unknown { border: 2px solid var(--fc-unknown) !important; border-radius: 14px !important;
+  padding: 18px 18px 14px !important; margin: 14px 0 6px !important;
+  background: color-mix(in srgb, var(--fc-unknown) 6%, transparent) !important; }
+.fc-unknown__badge { display: inline-block; font-size: 13px; font-weight: 800; letter-spacing: .02em;
+  color: #fff; background: var(--fc-unknown); padding: 4px 10px; border-radius: 999px; }
+.fc-unknown__title { font-size: 26px; font-weight: 800; line-height: 1.25; margin: 10px 0 6px; color: var(--fc-ink, inherit); }
+.fc-unknown__desc { font-size: 16px; line-height: 1.55; margin: 0 0 4px; color: var(--fc-ink, inherit); }
+.fc-unknown__desc b { color: var(--fc-unknown); }
+.fc-unknown__field label span, .fc-unknown__field .label-wrap span { font-size: 16px !important; font-weight: 700 !important; }
+.fc-unknown__field input { font-size: 20px !important; }
+.fc-unknown__field label { font-size: 17px !important; }
+.fc-unknown__btn { font-size: 20px !important; font-weight: 800 !important; min-height: 58px !important;
+  background: var(--fc-unknown) !important; border-color: var(--fc-unknown) !important;
+  color: #fff !important; border-radius: 12px !important; }
+.fc-unknown-card .fc-unknown-prob { font-size: 22px; font-weight: 800; color: var(--fc-unknown); }
+.fc-unknown-card .fc-chip { font-size: 16px; padding: 6px 12px; }
+.fc-unknown-card .fc-unknown-bars { font-size: 16px; }
+</style>
+<span class="fc-unknown__badge">NEW · 치수를 몰라요</span>
+<p class="fc-unknown__title">줄자 없이, 키·몸무게로 내 사이즈 찾기</p>
+<p class="fc-unknown__desc">아래 <b>성별 · 키 · 몸무게</b>만 넣으면 돼요.
+어깨·가슴·허리를 예측해 <b>사이즈마다 맞을 확률</b>을 보여 주고, 가장 확률이 큰 사이즈를 추천해요.</p>
+<p class="fc-help">한국인 5,092명(사이즈코리아 8차)으로 배운 식 · 위 칸에 줄자로 잰 값이 있으면 그 값을 그대로 써요</p>
+"""
+
+
 GARMENT_PHOTO_LABELS = {
     '상품 사진 (옷만 펴 놓고 찍음)': 'flat-lay',
     '착용 사진 (사람이 입고 찍음)': 'model',
@@ -372,6 +485,20 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
             )
             gr.HTML('<p class="fc-help">둘레로 넣으면 치수표의 단면과 자동으로 맞춰요 (가슴둘레 96 → 단면 48). '
                     '레귤러핏 옷 기준이라, 오버핏으로 나온 옷은 크게 추천될 수 있어요.</p>', padding=False)
+            # 새 항목 (F-37): 치수를 모를 때 키·몸무게로 추천. 위 칸에 줄자로 잰 값이 있으면 그 항목은 그대로 쓴다
+            # 눈에 띄게: 펼친 채로, 파란 테두리 상자 + 큰 제목·글씨·버튼. 스타일은 이 상자(.fc-unknown) 안에만 건다
+            #   (ui_style.py 는 그대로). 팀 팔레트 강조색이 검정이라 이 상자만 파란색(--fc-unknown)을 따로 쓴다.
+            with gr.Group(elem_classes='fc-unknown'):
+                gr.HTML(UNKNOWN_HEAD_HTML, padding=False)
+                with gr.Row():
+                    sex_in = gr.Radio(choices=['남', '여'], value=None, label='성별', elem_classes='fc-unknown__field')
+                with gr.Row():
+                    unknown_height_in = gr.Number(value=None, label='키 (cm)', placeholder='예: 172',
+                                                  elem_classes='fc-unknown__field')
+                    weight_in = gr.Number(value=None, label='몸무게 (kg)', placeholder='예: 68',
+                                          elem_classes='fc-unknown__field')
+                unknown_btn = gr.Button('키·몸무게로 내 사이즈 찾기', variant='primary', size='lg',
+                                        elem_classes='fc-unknown__btn')
 
             with gr.Row(elem_classes='fc-actions'):
                 size_btn = gr.Button('사이즈만 보기', variant='secondary', size='lg', scale=2)
@@ -403,6 +530,11 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
     size_btn.click(
         fn=size_only,
         inputs=[chart_in, height_in, shoulder_in, chest_in, waist_in],
+        outputs=[size_out, sec3_out],
+    )
+    unknown_btn.click(
+        fn=size_unknown_only,
+        inputs=[chart_in, height_in, sex_in, unknown_height_in, weight_in, shoulder_in, chest_in, waist_in],
         outputs=[size_out, sec3_out],
     )
 

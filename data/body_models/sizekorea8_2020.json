@@ -1,0 +1,85 @@
+{
+ "source": "사이즈코리아 8차(2020) 직접측정 공공용 원자료 (국가데이터처 MDIS). 원자료는 저장소에 올리지 않는다 — 여기는 회귀 계수만",
+ "method": "Bartol 외(Sensors 2022) 방식: 성별·부위별 선형 회귀 a + b·키(cm) + c·몸무게(kg)",
+ "split": "무작위 80/20, seed 42",
+ "columns": {
+  "sex": "성별 (1=남, 2=여)",
+  "height": "002. 키",
+  "weight": "125. 몸무게",
+  "shoulder": "088. 어깨사이너비",
+  "chest": "042. 젖가슴둘레",
+  "waist": "045. 허리둘레"
+ },
+ "sex": {
+  "m": {
+   "n_train": 1855,
+   "n_test": 464,
+   "parts": {
+    "shoulder": {
+     "a": 14.1855,
+     "b_height": 0.12947,
+     "c_weight": 0.04327,
+     "resid_sd_cm": 1.49,
+     "test_mae_cm": 1.24,
+     "test_rmse_cm": 1.62
+    },
+    "chest": {
+     "a": 94.3432,
+     "b_height": -0.2516,
+     "c_weight": 0.61778,
+     "resid_sd_cm": 2.99,
+     "test_mae_cm": 2.35,
+     "test_rmse_cm": 3.04
+    },
+    "waist": {
+     "a": 133.8252,
+     "b_height": -0.61996,
+     "c_weight": 0.8112,
+     "resid_sd_cm": 4.21,
+     "test_mae_cm": 3.39,
+     "test_rmse_cm": 4.21
+    }
+   },
+   "resid_corr": {
+    "shoulder|chest": 0.099,
+    "shoulder|waist": -0.073,
+    "chest|waist": 0.194
+   }
+  },
+  "f": {
+   "n_train": 2218,
+   "n_test": 555,
+   "parts": {
+    "shoulder": {
+     "a": 15.6063,
+     "b_height": 0.09994,
+     "c_weight": 0.06403,
+     "resid_sd_cm": 1.32,
+     "test_mae_cm": 1.06,
+     "test_rmse_cm": 1.34
+    },
+    "chest": {
+     "a": 113.2515,
+     "b_height": -0.46638,
+     "c_weight": 0.84225,
+     "resid_sd_cm": 3.49,
+     "test_mae_cm": 2.55,
+     "test_rmse_cm": 3.26
+    },
+    "waist": {
+     "a": 119.4092,
+     "b_height": -0.59877,
+     "c_weight": 0.92725,
+     "resid_sd_cm": 3.92,
+     "test_mae_cm": 2.92,
+     "test_rmse_cm": 3.65
+    }
+   },
+   "resid_corr": {
+    "shoulder|chest": 0.101,
+    "shoulder|waist": 0.036,
+    "chest|waist": 0.53
+   }
+  }
+ }
+}

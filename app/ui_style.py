@@ -89,7 +89,7 @@ footer { display: none !important; }
 .fc-logo b { color: var(--fc-point); font-weight: 700; letter-spacing: 0; }
 .fc-nav { display: flex; gap: 22px; font-size: 13px; color: var(--fc-header_sub); }
 .fc-nav span:first-child { color: var(--fc-header_ink); font-weight: 600; }
-.fc-hero { padding: 52px 0 40px; }
+.fc-hero { padding: 36px 0 22px; }
 .fc-eyebrow { margin: 0 0 12px; font-size: 11px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase;
   color: var(--fc-sub); }
 .fc-hero h1 { margin: 0; font-size: clamp(30px, 4.2vw, 46px); line-height: 1.22; font-weight: 700;
@@ -169,6 +169,60 @@ footer { display: none !important; }
 .fc-size__legend { margin: 12px 0 0; font-size: 11px; color: var(--fc-sub); }
 .fc-size__notes { margin: 6px 0 0; padding: 0; list-style: none; font-size: 11px; line-height: 1.6; color: var(--fc-sub); }
 
+/* 단계 탭 (01 사진 → 02 치수 → 03 결과 → 04 사이즈 비교). 탭 머리를 단계 표시처럼 */
+.fc-stepper { border: none !important; background: transparent !important; }
+.fc-stepper > .tab-wrapper, .fc-stepper .tab-wrapper { border-bottom: 1px solid var(--fc-line) !important; margin-bottom: 8px; }
+.fc-stepper button[role="tab"] { flex: 1; justify-content: flex-start; padding: 14px 0 12px !important;
+  font-size: 15px !important; font-weight: 600 !important; letter-spacing: -0.01em; color: var(--fc-sub) !important;
+  background: transparent !important; border: none !important; border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important; white-space: pre; }
+.fc-stepper button[role="tab"][aria-selected="true"], .fc-stepper button[role="tab"].selected {
+  color: var(--fc-ink) !important; border-bottom-color: var(--fc-ink) !important; }
+.fc-stepper .tabitem { border: none !important; padding: 0 !important; background: transparent !important; }
+.fc-stepper .fc-sec .fc-num { display: none; }   /* 탭이 단계 번호를 보여 주므로 섹션 번호는 숨김 */
+
+/* ② 치수: 알아요/몰라요 선택 */
+.fc-mode { border: none !important; background: transparent !important; padding: 0 !important; }
+.fc-mode .wrap { display: grid !important; grid-template-columns: 1fr 1fr; gap: 0 !important; }
+.fc-mode label { justify-content: center; min-height: 52px; font-size: 15px !important; font-weight: 600 !important;
+  border: 1px solid var(--fc-ink) !important; border-radius: 0 !important; margin: 0 !important; }
+.fc-mode label + label { border-left: none !important; }
+.fc-mode label input { display: none; }
+.fc-modebox { border: 1px solid var(--fc-line) !important; padding: 14px !important; background: var(--fc-soft) !important; }
+
+/* 핏 스케일 (결과 카드) */
+.fc-scale { margin: 4px 0 22px; }
+.fc-scale__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+.fc-scale__head b { font-size: 11px; font-weight: 700; letter-spacing: .18em; color: var(--fc-ink); }
+.fc-scale__head span { font-size: 11px; color: var(--fc-sub); }
+.fc-scale__track { position: relative; height: 6px; background: var(--fc-soft); margin: 0 10px; }
+.fc-scale__seg { position: absolute; top: 0; height: 6px; background: var(--fc-line); }
+.fc-scale__seg + .fc-scale__seg { border-left: 2px solid var(--fc-surface); }
+.fc-scale__seg.is-regular { background: var(--fc-ink); }
+.fc-scale__dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+  background: var(--fc-surface); border: 2px solid var(--fc-sub); }
+.fc-scale__dot i { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); font-style: normal;
+  font-size: 12px; font-weight: 600; color: var(--fc-sub); white-space: nowrap; }
+.fc-scale__dot.is-pick { width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 3px solid var(--fc-ink);
+  background: var(--fc-surface); z-index: 2; }
+.fc-scale__dot.is-pick i { top: 20px; color: var(--fc-ink); font-weight: 800; }
+.fc-scale__bands { position: relative; height: 18px; margin: 30px 10px 0; }
+.fc-scale__band { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--fc-sub); white-space: nowrap; }
+.fc-scale__band.is-regular { color: var(--fc-ink); font-weight: 700; }
+
+/* 키·몸무게 추정 카드 */
+.fc-unknown-card .fc-unknown-prob { margin: 8px 0 0; font-size: 20px; font-weight: 800; color: var(--fc-point); }
+
+/* ④ 사이즈 비교 표 */
+.fc-cmp { margin-top: 18px; padding: 22px 24px; border: 1px solid var(--fc-line); background: var(--fc-surface); }
+.fc-cmp table.fc-cmp__table { width: 100%; border-collapse: collapse; font-size: 15px; border: none !important; }
+.fc-cmp .fc-cmp__table th, .fc-cmp .fc-cmp__table td { padding: 12px 8px; text-align: right; border: none !important;
+  border-bottom: 1px solid var(--fc-line) !important; background: transparent; font-variant-numeric: tabular-nums; }
+.fc-cmp .fc-cmp__table th { font-size: 14px; font-weight: 600; color: var(--fc-sub); border-bottom: 1px solid var(--fc-ink) !important; }
+.fc-cmp .fc-cmp__table .is-pick { color: var(--fc-ink); font-weight: 800; }
+.fc-cmp .fc-cmp__table small { display: block; font-size: 11px; font-weight: 500; color: var(--fc-sub); }
+.fc-cmp .fc-cmp__name { text-align: left; color: var(--fc-sub); }
+
 @media (max-width: 900px) {
   .fc-main { flex-direction: column !important; }
   .fc-result { position: static; }
@@ -188,12 +242,9 @@ HEADER_HTML = """
   <nav class="fc-nav"><span>가상 피팅</span><span>사이즈 추천</span><span>SKKU 종합설계</span></nav>
 </header>
 <section class="fc-hero">
-  <p class="fc-eyebrow">Virtual fitting · Size</p>
+  <p class="fc-eyebrow">Virtual fitting / Size</p>
   <h1>입어 보기 전에,<br>어울리는지 그리고 맞는지까지</h1>
-  <p class="fc-sub">내 사진과 옷 사진으로 착용 모습을 보고, 내 치수로 사이즈를 추천받아요.</p>
-  <div class="fc-steps">
-    <div><b>01</b>사진 검사</div><div><b>02</b>AI 합성</div><div><b>03</b>얼굴·배경 되돌리기</div><div><b>04</b>사이즈 추천</div>
-  </div>
+  <p class="fc-sub">내 사진과 옷 사진으로 착용 모습을 보고, 치수를 몰라도 사이즈를 추천받아요.</p>
 </section>
 """
 

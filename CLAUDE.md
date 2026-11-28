@@ -127,6 +127,7 @@ GPU 없이 로컬에서 되는 것:
 ```sh
 python scripts/compare_grid.py data/samples/results/<폴더> --garment-dir data/samples
 python scripts/prepare_person.py data/person -o data/person/prepared
+python scripts/ui_preview.py --sample <합성결과.png>   # 화면만 확인 (합성 엔진은 가짜), http://127.0.0.1:7873
 ```
 `compare_grid.py` 는 torch를 안 쓴다. Kaggle 결과로 비교 이미지를 다시 만들 때 쓴다.
 

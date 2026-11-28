@@ -67,6 +67,8 @@ CLOTH_LABELS = {
 
 CHART_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                          'data', 'size_charts')
+PHOTO_UPLOAD_GUIDE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  'assets', 'photo_upload_guide.png')
 
 
 def load_chart(filename):
@@ -554,6 +556,9 @@ with gr.Blocks(title='FITCHECK — 가상 피팅', **({} if GRADIO6 else STYLE))
         with gr.Column(scale=5, elem_classes='fc-panel'):
             # 섹션 제목 줄도 출력이다 — 각 단계가 끝나면 걸린 시간 배지를 붙여 다시 그린다
             sec1_out = gr.HTML(sec('01'), padding=False)
+            with gr.Accordion('업로드 가이드 · 사진 촬영 기준 보기', open=False):
+                gr.Image(value=PHOTO_UPLOAD_GUIDE, show_label=False, interactive=False,
+                         container=False, height=680)
             with gr.Row():
                 person_in = gr.Image(label='인물 사진', type='pil', height=360)
                 # 초록 = 통과, 빨강 = 다시 찍기. 노란 막대 = 필요한 코~발목 길이, 그 옆 막대 = 사진 속 길이 (app/photo_guide.py)

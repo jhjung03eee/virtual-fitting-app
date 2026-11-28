@@ -153,6 +153,7 @@ footer { display: none !important; }
   border: 1px solid var(--fc-line); border-radius: var(--fc-radius_sm); background: var(--fc-surface); color: var(--fc-ink); }
 .fc-chip.is-pick { background: var(--fc-point); border-color: var(--fc-point); color: var(--fc-point_ink); }
 .fc-chip.is-no { color: var(--fc-sub); text-decoration: line-through; }
+.fc-chip.is-unknown { color: var(--fc-sub); border-style: dashed; }
 .fc-size table.fc-table, .fc-size .fc-table tr { border: none !important; }
 .fc-size table.fc-table { width: 100%; margin: 0; border-collapse: collapse; font-size: 13px; border: none; }
 .fc-size .fc-table th { padding: 8px 6px; text-align: left; font-size: 12px; font-weight: 500; color: var(--fc-sub);

@@ -103,6 +103,30 @@ class TestRecommend(unittest.TestCase):
         self.assertIsNone(rec.best)
         self.assertTrue(rec.notes)
 
+    def test_size_without_comparable_measurement_cannot_win(self):
+        chart = SizeChart(name='치수가 빠진 상의', category='upper', sizes={
+            'S': {'length': 66.0},
+            'M': {'chest': 52.0, 'length': 68.0},
+        })
+        rec = recommend(chart, {'chest': 48.0})
+
+        self.assertEqual(rec.best.size, 'M')
+        self.assertEqual([fit.size for fit in rec.ranked], ['M', 'S'])
+        self.assertFalse(rec.ranked[-1].scorable)
+        self.assertTrue(any('판단할 수 없는 사이즈: S' in note for note in rec.notes))
+        self.assertFalse(any('모든 사이즈가 몸 치수보다 작습니다.' in note for note in rec.notes))
+
+    def test_unscorable_size_does_not_hide_all_sizes_too_small(self):
+        chart = SizeChart(name='치수가 빠진 상의', category='upper', sizes={
+            'S': {'length': 66.0}, 'M': {'chest': 45.0},
+        })
+        rec = recommend(chart, {'chest': 48.0})
+
+        self.assertEqual(rec.best.size, 'M')
+        self.assertFalse(rec.best.wearable)
+        self.assertTrue(any('비교 가능한 사이즈는 모두 몸 치수보다 작습니다.' in note
+                            for note in rec.notes))
+
     def test_missing_dimension_is_noted(self):
         rec = recommend(UPPER, {'chest': 47.0})  # shoulder/length 없음
         self.assertTrue(any('제외한 항목' in n for n in rec.notes))

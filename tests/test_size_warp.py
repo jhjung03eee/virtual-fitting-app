@@ -14,6 +14,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from size_warp import scales_for_size, warp_garment  # noqa: E402
 
+try:
+    import cv2  # noqa: F401
+    HAS_CV2 = True
+except ImportError:      # cv2 는 mediapipe 와 같이 설치된다. 없으면 warp_garment 만 못 돌린다
+    HAS_CV2 = False
+
+needs_cv2 = unittest.skipUnless(HAS_CV2, 'cv2(OpenCV)가 없어 건너뜀')
+
 BLUE, WHITE = (20, 30, 120), (240, 240, 240)
 SHOULDER, HEM, LEFT, RIGHT = 60, 120, 50, 110      # 옷: 어깨선 60 ~ 밑단 120, 폭 60 (가운데 80)
 
@@ -33,6 +41,7 @@ def extent(mask):
 
 
 class TestSizeWarp(unittest.TestCase):
+    @needs_cv2
     def test_longer_and_wider(self):
         image, mask = tee()
         out, new_mask = warp_garment(image, mask, SHOULDER, 80, scale_x=1.2, scale_y=1.25)
@@ -42,6 +51,7 @@ class TestSizeWarp(unittest.TestCase):
         # 늘어난 밑단 자리는 옷 색으로 덮인다
         self.assertLess(np.asarray(out)[hem - 3, 80, 0], 60)
 
+    @needs_cv2
     def test_narrower_fills_revealed_sides(self):
         image, mask = tee()
         out, new_mask = warp_garment(image, mask, SHOULDER, 80, scale_x=0.8, scale_y=1.0)
@@ -51,6 +61,7 @@ class TestSizeWarp(unittest.TestCase):
         side = np.asarray(out)[SHOULDER + 20, LEFT + 2]
         self.assertGreater(int(side[0]), 150)
 
+    @needs_cv2
     def test_above_shoulder_untouched(self):
         image, mask = tee()
         rgb = np.asarray(image).copy()
@@ -58,6 +69,7 @@ class TestSizeWarp(unittest.TestCase):
         out, _ = warp_garment(Image.fromarray(rgb), mask, SHOULDER, 80, scale_x=1.3, scale_y=1.3)
         np.testing.assert_array_equal(np.asarray(out)[10:30, 70:90], rgb[10:30, 70:90])
 
+    @needs_cv2
     def test_keep_stays_on_top(self):
         """몸판이 넓어져도 팔(keep)은 원래 픽셀 그대로 위에 남는다."""
         image, mask = tee()

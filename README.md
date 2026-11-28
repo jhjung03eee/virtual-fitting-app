@@ -21,6 +21,29 @@
 사진은 **정면 · 팔은 몸에서 주먹 하나 간격 · 머리부터 발끝까지 화면 가득** 이어야 한다
 (앱이 올리는 순간 검사해서 안내한다).
 
+## 팀원용 협업 방법 — PR 보내기
+
+`master`에 바로 올리지 않고 브랜치를 따서 PR로 올린다.
+
+```sh
+git checkout master
+git pull
+git checkout -b feature/작업이름
+# 수정한 뒤
+python scripts/check_syntax.py
+python -m unittest discover -s tests
+git add 수정한파일
+git commit -m "무엇을 왜 바꿨는지"
+git push -u origin feature/작업이름
+```
+
+1. 푸시 후 GitHub에서 **Compare & pull request** 를 눌러 PR을 연다 (양식은 자동으로 채워진다)
+2. 다른 팀원에게 리뷰를 부탁한다. 본인 PR은 본인이 승인할 수 없다
+3. 리뷰가 끝나면 **Merge pull request** 를 누른다
+
+같은 파일의 같은 부분을 서로 다르게 고쳤다면 충돌이 표시되니, 어느 쪽을 남길지 직접 고른다.
+`git push --force` 는 원격 기록을 덮어쓸 수 있으므로 쓰지 않는다.
+
 ## 진행 상황
 
 - [x] 합성 모델 구동·비교: CatVTON → HR-VITON → 하이브리드 → **FASHN VTON v1.5 채택**, FitDiT 비교 후 보류
